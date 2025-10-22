@@ -1,4 +1,4 @@
-// 表カレンダー手帳（外部ライブラリなし版）
+// 表カレンダー手帳 v3（複数日スパン + 時間対応、外部ライブラリなし）
 (function(){
   'use strict';
 
@@ -18,32 +18,48 @@
   const cellDialog = $('#cellDialog');
   const cellTitle = $('#cellTitle');
   const cellMemo = $('#cellMemo');
+  const startDateInput = $('#startDate');
+  const endDateInput = $('#endDate');
+  const startTimeInput = $('#startTime');
+  const endTimeInput = $('#endTime');
   const saveCellBtn = $('#saveCell');
   const clearCellBtn = $('#clearCell');
+  const clearSpanBtn = $('#clearSpan');
+  const scopeRow = $('#scopeRow');
 
-  let state = loadState() || defaultStateForMonth(fmtYM(new Date()));
+  let state = migrate(loadState()) || defaultStateForMonth(fmtYM(new Date()));
   let activeCellKey = null; // "YYYY-MM-DD|colId"
+  let activeCellDate = null; // "YYYY-MM-DD"
+  let activeColId = null;
 
   init();
 
   function defaultStateForMonth(monthStr){
     return {
-      version: 2,
+      version: 3,
       month: monthStr,
       columns: [
-        { id: genId(), title: '予定1', width: 220 },
-        { id: genId(), title: '予定2', width: 220 }
+        { id: genId(), title: '予定1', width: 240 },
+        { id: genId(), title: '予定2', width: 240 }
       ],
-      events: {}, // key: "date|colId" -> {title, memo}
-      dateColWidth: 160,
-      weekdayColWidth: 100,
+      events: {}, // key: "date|colId" -> {title, memo, startTime, endTime, spanId?, spanStart?, spanEnd?}
+      dateColWidth: 180,
+      weekdayColWidth: 110,
       rowHeights: {}
     };
   }
 
-  function init(){
-    render();
-    bindControls();
+  function migrate(s){
+    if (!s) return null;
+    if (!s.version) s.version = 1;
+    // v1/v2 -> v3: keep fields, bump version
+    if (s.version < 3){
+      s.version = 3;
+      s.dateColWidth = s.dateColWidth || 180;
+      s.weekdayColWidth = s.weekdayColWidth || 110;
+      // events remain compatible
+    }
+    return s;
   }
 
   function saveState(){
@@ -64,6 +80,19 @@
     const m = ('0' + (d.getMonth()+1)).slice(-2);
     const da = ('0' + d.getDate()).slice(-2);
     return `${y}-${m}-${da}`;
+  }
+  function addDays(dateStr, n){
+    const [y,m,d] = dateStr.split('-').map(Number);
+    const dt = new Date(y, m-1, d);
+    dt.setDate(dt.getDate() + n);
+    return fmtYMD(dt);
+  }
+  function eachDateInclusive(startStr, endStr, cb){
+    let cur = startStr;
+    while (cur <= endStr){
+      cb(cur);
+      cur = addDays(cur, 1);
+    }
   }
 
   function monthStartEnd(monthStr){
@@ -97,7 +126,7 @@
     state.columns.forEach(col => {
       const th = headerTemplate.content.firstElementChild.cloneNode(true);
       th.dataset.colId = col.id;
-      th.style.width = (col.width || 220) + 'px';
+      th.style.width = (col.width || 240) + 'px';
       th.querySelector('.th-title').textContent = col.title || '予定';
 
       // 列名編集
@@ -158,13 +187,15 @@
         div.className = 'cell ' + (data && data.title ? '' : 'empty');
         div.tabIndex = 0;
         div.dataset.key = key;
+        div.dataset.date = dateStr;
+        div.dataset.colId = col.id;
 
         const span = document.createElement('span');
         span.className = 'cell-title';
-        span.textContent = data && data.title ? data.title : '（タップで入力）';
+        span.textContent = formatTitle(data);
         div.appendChild(span);
 
-        div.addEventListener('click', () => openCellEditor(key));
+        div.addEventListener('click', (e) => openCellEditor(key, dateStr, col.id));
         td.appendChild(div);
         tr.appendChild(td);
       });
@@ -185,7 +216,7 @@
     // 固定列のリサイズ
     document.querySelectorAll('th[data-col-fixed="date"] .col-resizer').forEach(res => {
       enableColResize(res, (w) => {
-        state.dateColWidth = Math.max(100, w);
+        state.dateColWidth = Math.max(120, w);
         headerRow.children[0].style.width = state.dateColWidth + 'px';
         document.querySelectorAll('.date-cell').forEach(c => c.style.width = state.dateColWidth + 'px');
         syncStickyLeftOffsets();
@@ -194,13 +225,22 @@
     });
     document.querySelectorAll('th[data-col-fixed="weekday"] .col-resizer').forEach(res => {
       enableColResize(res, (w) => {
-        state.weekdayColWidth = Math.max(80, w);
+        state.weekdayColWidth = Math.max(90, w);
         headerRow.children[1].style.width = state.weekdayColWidth + 'px';
         document.querySelectorAll('.weekday-cell').forEach(c => c.style.width = state.weekdayColWidth + 'px');
         syncStickyLeftOffsets();
         saveState();
       });
     });
+  }
+
+  function formatTitle(data){
+    if (!data || (!data.title && !data.startTime && !data.endTime)) return '（タップで入力）';
+    const t = data.title || '';
+    const st = data.startTime || '';
+    const et = data.endTime || '';
+    const time = st && et ? `${st}–${et} ` : (st ? `${st} ` : (et ? `${et} ` : ''));
+    return (time + t).trim();
   }
 
   function syncStickyLeftOffsets(){
@@ -226,15 +266,15 @@
       setMonth(fmtYM(new Date()));
     });
     addColumnBtn.addEventListener('click', () => {
-      state.columns.push({ id: genId(), title: '予定', width: 220 });
+      state.columns.push({ id: genId(), title: '予定', width: 240 });
       saveState();
       render();
     });
     resetSizesBtn.addEventListener('click', () => {
       if (!confirm('列幅・行高を初期化しますか？')) return;
-      state.dateColWidth = 160;
-      state.weekdayColWidth = 100;
-      state.columns.forEach(c => c.width = 220);
+      state.dateColWidth = 180;
+      state.weekdayColWidth = 110;
+      state.columns.forEach(c => c.width = 240);
       state.rowHeights = {};
       saveState();
       render();
@@ -256,7 +296,7 @@
         try {
           const obj = JSON.parse(reader.result);
           if (!obj || typeof obj !== 'object' || !obj.month) throw new Error('不正なファイルです');
-          state = obj;
+          state = migrate(obj);
           saveState();
           render();
         } catch (err) {
@@ -269,42 +309,147 @@
 
     saveCellBtn.addEventListener('click', onSaveCell);
     clearCellBtn.addEventListener('click', onClearCell);
+    clearSpanBtn.addEventListener('click', onClearSpan);
   }
 
-  function openCellEditor(key){
+  /* ---- 編集ダイアログ ---- */
+  function openCellEditor(key, dateStr, colId){
     activeCellKey = key;
-    const data = state.events[key] || { title: '', memo: '' };
+    activeCellDate = dateStr;
+    activeColId = colId;
+
+    const data = state.events[key] || { title: '', memo: '', startTime: '', endTime: '' };
+
+    // 期間情報（spanIdがあればその期間を優先）
+    const defaultStart = data.spanStart || dateStr;
+    const defaultEnd = data.spanEnd || dateStr;
+
     cellTitle.value = data.title || '';
     cellMemo.value = data.memo || '';
+    startDateInput.value = defaultStart;
+    endDateInput.value = defaultEnd;
+    startTimeInput.value = data.startTime || '';
+    endTimeInput.value = data.endTime || '';
+
+    // 期間全体編集のUI
+    if (data.spanId && data.spanStart && data.spanEnd && data.spanStart !== data.spanEnd){
+      scopeRow.style.display = '';
+      clearSpanBtn.style.display = '';
+      // 既定は期間全体
+      setScope('span');
+    } else {
+      scopeRow.style.display = 'none';
+      clearSpanBtn.style.display = 'none';
+    }
+
     if (typeof cellDialog.showModal === 'function') {
       cellDialog.showModal();
     } else {
+      // フォールバック
       const title = prompt('タイトルを入力', cellTitle.value) || '';
       const memo = prompt('メモを入力', cellMemo.value) || '';
-      applyCellEdit(title, memo);
-    }
-  }
-  function onSaveCell(){
-    applyCellEdit(cellTitle.value.trim(), cellMemo.value.trim());
-  }
-  function onClearCell(){
-    applyCellEdit('', '');
-    cellTitle.value = '';
-    cellMemo.value = '';
-  }
-  function applyCellEdit(title, memo){
-    if (!activeCellKey) return;
-    if (!title && !memo) { delete state.events[activeCellKey]; }
-    else { state.events[activeCellKey] = { title, memo }; }
-    saveState();
-    const el = document.querySelector(`.cell[data-key="${cssEscape(activeCellKey)}"]`);
-    if (el){
-      el.querySelector('.cell-title').textContent = title || '（タップで入力）';
-      el.classList.toggle('empty', !title);
+      applySave({ title, memo, start: dateStr, end: dateStr, st: '', et: '', scope: 'single' });
     }
   }
 
-  /* リサイズ */
+  function setScope(v){
+    const radios = document.querySelectorAll('input[name="editScope"]');
+    radios.forEach(r => r.checked = (r.value === v));
+  }
+  function getScope(){
+    const r = document.querySelector('input[name="editScope"]:checked');
+    return r ? r.value : 'span';
+  }
+
+  function onSaveCell(){
+    const title = (cellTitle.value || '').trim();
+    const memo = (cellMemo.value || '').trim();
+    const stDate = startDateInput.value || activeCellDate;
+    const enDate = endDateInput.value || stDate;
+    const stTime = (startTimeInput.value || '').trim();
+    const enTime = (endTimeInput.value || '').trim();
+
+    // 正規化: 開始 > 終了 の時は入れ替え
+    let startStr = stDate, endStr = enDate;
+    if (startStr > endStr){ const t = startStr; startStr = endStr; endStr = t; }
+
+    const data = state.events[activeCellKey] || {};
+    const hasSpan = !!data.spanId && data.spanStart && data.spanEnd && data.spanStart !== data.spanEnd;
+    const scope = hasSpan ? getScope() : (startStr !== endStr ? 'span' : 'single');
+
+    applySave({ title, memo, start: startStr, end: endStr, st: stTime, et: enTime, scope });
+  }
+
+  function applySave({ title, memo, start, end, st, et, scope }){
+    // 期間ID
+    let spanId = null;
+    if (scope === 'span' || start !== end){
+      spanId = (state.events[activeCellKey] && state.events[activeCellKey].spanId) || ('S_' + genId());
+    }
+
+    if (scope === 'single'){
+      // この日のみ
+      const key = activeCellDate + '|' + activeColId;
+      upsertEvent(key, { title, memo, startTime: st, endTime: et, spanId: null, spanStart: null, spanEnd: null });
+    } else {
+      // 期間全体
+      eachDateInclusive(start, end, (d) => {
+        const key = d + '|' + activeColId;
+        upsertEvent(key, { title, memo, startTime: st, endTime: et, spanId, spanStart: start, spanEnd: end });
+      });
+    }
+    saveState();
+    refreshCellsForColumn(activeColId, start, end);
+  }
+
+  function upsertEvent(key, obj){
+    const v = state.events[key] || {};
+    state.events[key] = {
+      ...v,
+      title: obj.title,
+      memo: obj.memo,
+      startTime: obj.startTime,
+      endTime: obj.endTime,
+      spanId: obj.spanId || null,
+      spanStart: obj.spanStart || null,
+      spanEnd: obj.spanEnd || null
+    };
+  }
+
+  function refreshCellsForColumn(colId, start, end){
+    // 該当列の表示更新
+    const cells = document.querySelectorAll(`.cell[data-col-id="${cssEscape(colId)}"]`);
+    cells.forEach(cell => {
+      const d = cell.dataset.date;
+      const key = d + '|' + colId;
+      const data = state.events[key];
+      cell.querySelector('.cell-title').textContent = formatTitle(data);
+      cell.classList.toggle('empty', !(data && data.title));
+    });
+  }
+
+  function onClearCell(){
+    const key = activeCellDate + '|' + activeColId;
+    delete state.events[key];
+    saveState();
+    refreshCellsForColumn(activeColId, activeCellDate, activeCellDate);
+  }
+
+  function onClearSpan(){
+    const data = state.events[activeCellKey];
+    if (!data || !data.spanId) return;
+    if (!confirm('この期間の予定をすべて削除しますか？')) return;
+    const spanId = data.spanId;
+    Object.keys(state.events).forEach(k => {
+      if (state.events[k] && state.events[k].spanId === spanId){
+        delete state.events[k];
+      }
+    });
+    saveState();
+    refreshCellsForColumn(activeColId, data.spanStart, data.spanEnd);
+  }
+
+  /* ---- リサイズ ---- */
   function enableColResize(handle, onDone){
     let startX, startW, th;
     const start = (e) => {

@@ -50,18 +50,49 @@
   <dialog id="cellDialog">
     <form method="dialog" id="cellForm">
       <h3>予定の編集</h3>
-      <div class="field">
-        <label for="cellTitle">タイトル</label>
-        <input type="text" id="cellTitle" placeholder="予定のタイトル" />
+      <div class="grid2">
+        <div class="field">
+          <label for="cellTitle">タイトル</label>
+          <input type="text" id="cellTitle" placeholder="予定のタイトル" />
+        </div>
+        <div class="field">
+          <label for="cellMemo">メモ</label>
+          <textarea id="cellMemo" rows="6" placeholder="メモを入力"></textarea>
+        </div>
       </div>
-      <div class="field">
-        <label for="cellMemo">メモ</label>
-        <textarea id="cellMemo" rows="6" placeholder="メモを入力"></textarea>
+
+      <div class="grid2">
+        <div class="field">
+          <label for="startDate">開始日</label>
+          <input type="date" id="startDate" />
+        </div>
+        <div class="field">
+          <label for="endDate">終了日</label>
+          <input type="date" id="endDate" />
+        </div>
       </div>
+
+      <div class="grid2">
+        <div class="field">
+          <label for="startTime">開始時間</label>
+          <input type="time" id="startTime" />
+        </div>
+        <div class="field">
+          <label for="endTime">終了時間</label>
+          <input type="time" id="endTime" />
+        </div>
+      </div>
+
+      <div class="scope-row" id="scopeRow" style="display:none;">
+        <label><input type="radio" name="editScope" value="span" checked /> 期間全体を編集</label>
+        <label><input type="radio" name="editScope" value="single" /> この日のみ編集</label>
+      </div>
+
       <menu>
         <button value="cancel">キャンセル</button>
         <button id="saveCell" value="default">保存</button>
-        <button id="clearCell" type="button">消去</button>
+        <button id="clearCell" type="button">この日の予定を消去</button>
+        <button id="clearSpan" type="button" style="display:none;">この期間の予定を全消去</button>
       </menu>
     </form>
   </dialog>
