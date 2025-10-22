@@ -1,4 +1,4 @@
-/* 画面全体 */
+/* 共通 */
 * { box-sizing: border-box; }
 html, body { height: 100%; }
 body {
@@ -7,227 +7,72 @@ body {
   color: #111827;
   background: #f7fafc;
 }
-
-/* ヘッダー */
-.app-header {
-  position: sticky;
-  top: 0;
-  z-index: 200;
-  background: #fff;
-  border-bottom: 1px solid #e5e7eb;
-  padding: 10px 12px;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  flex-wrap: wrap;
-}
+.app-header { position: sticky; top: 0; z-index: 300; background: #fff; border-bottom: 1px solid #e5e7eb; padding: 10px 12px; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .app-header h1 { font-size: 18px; margin: 0 8px 0 0; }
 .controls { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .controls .month-label { font-weight: 700; margin: 0 8px; }
-.controls button, .controls label.import-label, .controls .toggles {
-  background: #111827;
-  color: #fff;
-  border: none;
-  border-radius: 10px;
-  padding: 8px 10px;
-  font-size: 14px;
-  cursor: pointer;
-}
+.controls button, .controls label.import-label, .controls .toggles { background: #111827; color: #fff; border: none; border-radius: 10px; padding: 8px 10px; font-size: 14px; cursor: pointer; }
 .controls .toggles { display: inline-flex; align-items: center; gap: 6px; }
 .controls .toggles input { accent-color: #111827; }
-.controls label.import-label { cursor: pointer; }
 .import-label input { display: none; }
+main { height: calc(100vh - 90px); }
 
-/* テーブルラッパ */
-#tableWrapper {
-  overflow: auto;
-  width: 100%;
-  height: calc(100vh - 90px);
-  border-top: 1px solid #e5e7eb;
-  background: #fff;
-}
-
-/* テーブル（はっきりした表罫線） */
-table {
-  border-collapse: collapse;
-  width: 100%;
-  min-width: 880px;
-  table-layout: fixed;
-}
-thead th, tbody td, tbody th {
-  border: 1px solid #d1d5db;
-}
-thead th {
-  position: sticky;
-  top: 0;
-  z-index: 150;
-  background: #eef2f7;
-  text-align: left;
-  padding: 6px 8px;
-  font-size: 13px;
-  white-space: nowrap;
-}
-
-/* 左固定列 */
-th.sticky-left {
-  position: sticky;
-  left: 0;
-  z-index: 160;
-  background: #eef2f7;
-}
-
-/* 2列目も固定（左幅はJSで同期） */
-th.sticky-left + th.sticky-left {
-  left: 120px; /* JSで上書き */
-}
-
-/* 本体セル */
-tbody th.date-cell {
-  position: sticky;
-  left: 0;
-  z-index: 120;
-  background: #fff;
-  color: #111827;
-  font-weight: 600;
-  width: 120px;
-  min-width: 70px;
-  font-variant-numeric: tabular-nums;
-  visibility: visible;
-}
-tbody td.weekday-cell {
-  position: sticky;
-  left: 120px; /* JSで上書き */
-  z-index: 120;
-  background: #fff;
-  color: #374151;
-  width: 70px;
-  min-width: 40px;
-  text-align: center;
-  font-weight: 600;
-  visibility: visible;
-}
-
-tbody td, tbody th {
-  padding: 4px 6px;
-  vertical-align: top;
-}
-
-/* セル中身 */
-.cell {
-  min-height: 30px;
-  outline: none;
-  border-radius: 6px;
-  padding: 2px 4px;
-  line-height: 1.4;
-  cursor: text;
-  position: relative;
-}
-.cell-title {
-  display: block;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
+/* 通常モード */
+#tableWrapper { overflow: auto; width: 100%; height: 100%; background: #fff; border-top: 1px solid #e5e7eb; }
+table { border-collapse: collapse; width: 100%; min-width: 880px; table-layout: fixed; }
+thead th, tbody td, tbody th { border: 1px solid #d1d5db; }
+thead th { position: sticky; top: 0; z-index: 150; background: #eef2f7; padding: 6px 8px; font-size: 13px; white-space: nowrap; }
+th.sticky-left { position: sticky; left: 0; z-index: 160; background: #eef2f7; }
+th.sticky-left + th.sticky-left { left: 120px; }
+tbody th.date-cell { position: sticky; left: 0; z-index: 120; background: #fff; font-weight: 600; width: 120px; min-width: 70px; }
+tbody td.weekday-cell { position: sticky; left: 120px; z-index: 120; background: #fff; width: 70px; min-width: 40px; text-align: center; font-weight: 600; }
+tbody td, tbody th { padding: 4px 6px; vertical-align: top; }
+.cell { min-height: 30px; outline: none; border-radius: 6px; padding: 2px 4px; line-height: 1.4; position: relative; }
+.cell-title { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .cell.empty .cell-title { color: #9ca3af; }
-
-/* 縦矢印（スパン予定の視覚化） */
-.span-chip {
-  position: absolute;
-  left: 6px;
-  top: 2px;
-  bottom: 2px;
-  width: 10px;
-  pointer-events: none;
-}
-.span-chip .line {
-  position: absolute;
-  left: 4px;
-  top: 0;
-  bottom: 0;
-  width: 2px;
-  background: #2563eb;
-  border-radius: 1px;
-}
-.span-chip.start .line { top: 50%; }
-.span-chip.end .line { bottom: 50%; }
-.span-chip.single .line { top: 50%; bottom: 50%; }
-.span-chip.end::after {
-  content: "";
-  position: absolute;
-  left: 2px;
-  bottom: -1px;
-  border-left: 4px solid transparent;
-  border-right: 4px solid transparent;
-  border-top: 6px solid #2563eb;
-}
-
-/* 列幅ドラッグ */
-.resizable { position: relative; }
-.col-resizer {
-  position: absolute;
-  right: 0;
-  top: 0;
-  width: 6px;
-  height: 100%;
-  cursor: col-resize;
-  user-select: none;
-}
-
-/* 行高さドラッグ */
-.row-wrapper { position: relative; }
-.row-resizer {
-  position: absolute;
-  left: 0;
-  bottom: 0;
-  width: 100%;
-  height: 6px;
-  cursor: row-resize;
-  user-select: none;
-}
-
-/* 列操作 */
+.span-chip { position: absolute; left: 6px; top: 2px; bottom: 2px; width: 10px; pointer-events: none; }
+.span-chip .line { position: absolute; left: 4px; top: 0; bottom: 0; width: 2px; background: #2563eb; border-radius: 1px; }
+.span-chip.start .line { top: 50%; } .span-chip.end .line { bottom: 50%; } .span-chip.single .line { top: 50%; bottom: 50%; }
+.span-chip.end::after { content: ""; position: absolute; left: 2px; bottom: -1px; border-left: 4px solid transparent; border-right: 4px solid transparent; border-top: 6px solid #2563eb; }
+.resizable { position: relative; } .col-resizer { position: absolute; right: 0; top: 0; width: 6px; height: 100%; cursor: col-resize; user-select: none; }
+.row-wrapper { position: relative; } .row-resizer { position: absolute; left: 0; bottom: 0; width: 100%; height: 6px; cursor: row-resize; user-select: none; }
 .th-inner { display: flex; align-items: center; gap: 6px; padding-right: 20px; }
 .th-title { flex: 1; font-weight: 700; }
-.delete-col {
-  position: absolute;
-  top: 4px; right: 10px;
-  border: none; background: transparent; color: #6b7280; font-size: 16px; cursor: pointer;
-}
+.delete-col { position: absolute; top: 4px; right: 10px; border: none; background: transparent; color: #6b7280; font-size: 16px; cursor: pointer; }
 .delete-col:hover { color: #ef4444; }
-
-/* ダイアログ */
-dialog::backdrop { background: rgba(0,0,0,0.25); }
-dialog {
-  border: none; border-radius: 12px;
-  width: min(700px, 96vw);
-  padding: 16px 18px;
-}
-dialog h3 { margin: 0 0 8px; }
-.field { display: grid; gap: 6px; margin: 8px 0; }
-.field input, .field textarea {
-  width: 100%;
-  padding: 8px 10px;
-  border: 1px solid #e5e7eb;
-  border-radius: 10px;
-  font-size: 14px;
-}
-.grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-.scope-row { display: flex; gap: 16px; align-items: center; margin-top: 6px; }
-
-dialog menu {
-  display: flex; gap: 10px; justify-content: flex-end;
-  padding: 0; margin: 10px 0 0;
-}
-dialog button {
-  background: #111827; color: #fff; border: none; border-radius: 10px;
-  padding: 8px 12px; cursor: pointer;
-}
-dialog button[value="cancel"] { background: #6b7280; }
-
-/* 行の高さはCSS変数で */
 .row-height { height: var(--row-height, 36px); }
 
-@media (max-width: 720px) {
-  thead th, tbody td, tbody th { padding: 4px; }
-  .grid2 { grid-template-columns: 1fr; }
-}
+/* 互換モード */
+.compat { display: grid; grid-template-columns: auto 1fr; height: 100%; width: 100%; border-top: 1px solid #e5e7eb; background: #fff; }
+.hidden { display: none; }
+.pane { position: relative; overflow: hidden; }
+.leftPane { min-width: 140px; border-right: 1px solid #e5e7eb; }
+.pane-header { position: sticky; top: 0; z-index: 200; display: grid; background: #eef2f7; border-bottom: 1px solid #d1d5db; }
+.leftPane .pane-header { grid-template-columns: var(--dateW,120px) var(--weekW,70px); }
+.rightPane .pane-header { display: grid; grid-auto-flow: column; grid-auto-columns: max-content; align-items: stretch; }
+.rh { position: relative; border-right: 1px solid #d1d5db; padding: 6px 8px; white-space: nowrap; }
+.rh .th-inner { display: flex; align-items: center; gap: 6px; padding-right: 18px; }
+.rh .th-title { font-weight: 700; }
+.rightPane .pane-body { overflow: auto; height: calc(100% - 34px); }
+.leftPane .pane-body { overflow: auto; height: calc(100% - 34px); }
+.leftRow { display: grid; grid-template-columns: var(--dateW,120px) var(--weekW,70px); border-bottom: 1px solid #e5e7eb; }
+.leftCell { padding: 4px 6px; display: flex; align-items: center; font-weight: 600; }
+.rightRow { display: grid; grid-template-columns: var(--cols); border-bottom: 1px solid #e5e7eb; position: relative; }
+.rCell { border-right: 1px solid #f0f2f5; padding: 2px 4px; position: relative; min-height: 30px; }
+.rCell .cell { padding: 0; }
+.rRowResizer { position: absolute; left: 0; bottom: 0; width: 100%; height: 6px; cursor: row-resize; }
+.dateHeader, .weekHeader { position: relative; padding: 6px 8px; border-right: 1px solid #d1d5db; }
+.leftHeader .col-resizer { position: absolute; top: 0; right: 0; width: 6px; height: 100%; cursor: col-resize; }
+.rSpanChip { position: absolute; left: 6px; top: 2px; bottom: 2px; width: 10px; pointer-events: none; }
+.rSpanChip .line { position: absolute; left: 4px; top: 0; bottom: 0; width: 2px; background: #2563eb; border-radius: 1px; }
+.rSpanChip.start .line { top: 50%; } .rSpanChip.end .line { bottom: 50%; } .rSpanChip.single .line { top: 50%; bottom: 50%; }
+.rSpanChip.end::after { content: ""; position: absolute; left: 2px; bottom: -1px; border-left: 4px solid transparent; border-right: 4px solid transparent; border-top: 6px solid #2563eb; }
+
+dialog::backdrop { background: rgba(0,0,0,0.25); }
+dialog { border: none; border-radius: 12px; width: min(700px, 96vw); padding: 16px 18px; }
+.grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.field { display: grid; gap: 6px; margin: 8px 0; }
+.field input, .field textarea { width: 100%; padding: 8px 10px; border: 1px solid #e5e7eb; border-radius: 10px; font-size: 14px; }
+dialog menu { display: flex; gap: 10px; justify-content: flex-end; padding: 0; margin: 10px 0 0; }
+dialog button { background: #111827; color: #fff; border: none; border-radius: 10px; padding: 8px 12px; cursor: pointer; }
+dialog button[value="cancel"] { background: #6b7280; }

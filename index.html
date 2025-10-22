@@ -18,23 +18,20 @@
       <button id="resetSizes">幅/高さ 初期化</button>
       <button id="resetData">データ初期化</button>
       <button id="exportJSON">エクスポート</button>
-      <label class="import-label">
-        インポート <input type="file" id="importJSON" accept="application/json" />
-      </label>
-      <label class="toggles">
-        <input type="checkbox" id="compactToggle" /> コンパクト表示
-      </label>
+      <label class="import-label">インポート <input type="file" id="importJSON" accept="application/json" /></label>
+      <label class="toggles"><input type="checkbox" id="compactToggle" /> コンパクト表示</label>
+      <label class="toggles"><input type="checkbox" id="compatToggle" /> iPhone互換モード</label>
       <button id="enableNotify">🔔 通知を有効化</button>
     </div>
   </header>
 
   <main>
+    <!-- 通常モード（テーブル） -->
     <div id="tableWrapper">
       <table id="plannerTable" aria-label="表カレンダー">
         <colgroup id="colgroup">
           <col id="col-date" />
           <col id="col-week" />
-          <!-- 動的列はJSで追加 -->
         </colgroup>
         <thead>
           <tr id="headerRow">
@@ -46,21 +43,31 @@
               <span class="hdr-week">曜</span>
               <div class="col-resizer" title="ドラッグで幅変更"></div>
             </th>
-            <!-- 3列目以降はJSで生成 -->
           </tr>
         </thead>
-        <tbody id="tableBody">
-          <!-- 日別の行はJSで生成 -->
-        </tbody>
+        <tbody id="tableBody"></tbody>
       </table>
+    </div>
+
+    <!-- 互換モード（2ペイン） -->
+    <div id="compatWrapper" class="compat hidden">
+      <div class="pane leftPane" id="leftPane">
+        <div class="pane-header">
+          <div class="leftHeader dateHeader">日付<div class="col-resizer" id="dateResize"></div></div>
+          <div class="leftHeader weekHeader">曜<div class="col-resizer" id="weekResize"></div></div>
+        </div>
+        <div class="pane-body" id="leftBody"></div>
+      </div>
+      <div class="pane rightPane" id="rightPane">
+        <div class="pane-header" id="rightHeader"></div>
+        <div class="pane-body" id="rightBody"></div>
+      </div>
     </div>
   </main>
 
-  <!-- セル編集ダイアログ（同等） -->
   <dialog id="cellDialog">
     <form method="dialog" id="cellForm">
       <h3>予定の編集</h3>
-
       <div class="grid2">
         <div class="field">
           <label for="cellTitle">タイトル</label>
@@ -71,7 +78,6 @@
           <textarea id="cellMemo" rows="6" placeholder="メモを入力"></textarea>
         </div>
       </div>
-
       <div class="grid2">
         <div class="field">
           <label for="startDate">開始日</label>
@@ -82,7 +88,6 @@
           <input type="date" id="endDate" />
         </div>
       </div>
-
       <div class="grid2">
         <div class="field">
           <label for="startTime">開始時間</label>
@@ -93,7 +98,6 @@
           <input type="time" id="endTime" />
         </div>
       </div>
-
       <div class="grid2">
         <div class="field">
           <label><input type="checkbox" id="notifyEnabled" /> この予定を通知</label>
@@ -104,12 +108,10 @@
           <input type="time" id="notifyTime" />
         </div>
       </div>
-
       <div class="scope-row" id="scopeRow" style="display:none;">
         <label><input type="radio" name="editScope" value="span" checked /> 期間全体を編集</label>
         <label><input type="radio" name="editScope" value="single" /> この日のみ編集</label>
       </div>
-
       <menu>
         <button value="cancel">キャンセル</button>
         <button id="saveCell" value="default">保存</button>
@@ -120,13 +122,13 @@
   </dialog>
 
   <template id="headerTemplate">
-    <th class="resizable" data-col-id="">
+    <div class="rh resizable" data-col-id="">
       <div class="th-inner">
-        <div class="th-title" contenteditable="true" spellcheck="false" title="タップ/クリックで列名を編集">予定</div>
+        <div class="th-title" contenteditable="true" spellcheck="false">予定</div>
         <button class="delete-col" title="この列を削除">×</button>
       </div>
-      <div class="col-resizer" title="ドラッグで幅変更"></div>
-    </th>
+      <div class="col-resizer"></div>
+    </div>
   </template>
 
   <script src="app.js"></script>
