@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>表カレンダー手帳</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <header class="app-header">
+    <h1>表カレンダー手帳</h1>
+    <div class="controls">
+      <button id="prevMonth">◀ 前の月</button>
+      <button id="todayBtn">今日</button>
+      <button id="nextMonth">次の月 ▶</button>
+      <span id="monthLabel"></span>
+      <button id="addColumn">列を追加</button>
+      <button id="resetSizes">幅/高さ 初期化</button>
+      <button id="exportJSON">エクスポート</button>
+      <label class="import-label">
+        インポート <input type="file" id="importJSON" accept="application/json" />
+      </label>
+    </div>
+  </header>
+
+  <main>
+    <div id="tableWrapper">
+      <table id="plannerTable">
+        <thead>
+          <tr id="headerRow">
+            <th class="sticky-left" data-col-fixed="date">
+              日にち
+              <div class="col-resizer"></div>
+            </th>
+            <th class="sticky-left" data-col-fixed="weekday">
+              曜日
+              <div class="col-resizer"></div>
+            </th>
+            <!-- dynamic headers from JS after this -->
+          </tr>
+        </thead>
+        <tbody id="tableBody">
+          <!-- rows are injected -->
+        </tbody>
+      </table>
+    </div>
+  </main>
+
+  <!-- Cell editor modal -->
+  <dialog id="cellDialog">
+    <form method="dialog" id="cellForm">
+      <h3>予定の編集</h3>
+      <div class="field">
+        <label>タイトル</label>
+        <input type="text" id="cellTitle" placeholder="予定のタイトル" />
+      </div>
+      <div class="field">
+        <label>メモ</label>
+        <textarea id="cellMemo" rows="6" placeholder="メモを入力"></textarea>
+      </div>
+      <menu>
+        <button value="cancel">キャンセル</button>
+        <button id="saveCell" value="default">保存</button>
+        <button id="clearCell" type="button">消去</button>
+      </menu>
+    </form>
+  </dialog>
+
+  <template id="headerTemplate">
+    <th class="resizable" data-col-id="">
+      <div class="th-content" contenteditable="true" spellcheck="false" title="タップ/クリックで列名を編集">予定</div>
+      <button class="delete-col" title="この列を削除">×</button>
+      <div class="col-resizer" title="ドラッグで幅変更"></div>
+    </th>
+  </template>
+
+  <script src="app.js"></script>
+</body>
+</html>
