@@ -1,142 +1,124 @@
-// 表カレンダー手帳 アプリ
-// 要求仕様：
-// - 一番左に「日にち（年月日）」、2番目に「曜日」、3番目以降は予定入力列（無制限に追加可）
-// - 列・行はタップ/ドラッグでサイズ変更可能
-// - 入力した予定をタップするとメモ入力（モーダル）
-// - GitHub Pages 等の静的ホスティングで動作 / ローカルストレージ保存
-
+// 表カレンダー手帳（外部ライブラリなし版）
 (function(){
   'use strict';
 
-  const table = document.getElementById('plannerTable');
-  const headerRow = document.getElementById('headerRow');
-  const tbody = document.getElementById('tableBody');
-  const monthLabel = document.getElementById('monthLabel');
-  const prevMonthBtn = document.getElementById('prevMonth');
-  const nextMonthBtn = document.getElementById('nextMonth');
-  const todayBtn = document.getElementById('todayBtn');
-  const addColumnBtn = document.getElementById('addColumn');
-  const resetSizesBtn = document.getElementById('resetSizes');
-  const exportBtn = document.getElementById('exportJSON');
-  const importInput = document.getElementById('importJSON');
-  const headerTemplate = document.getElementById('headerTemplate');
+  const $ = sel => document.querySelector(sel);
+  const headerRow = $('#headerRow');
+  const tbody = $('#tableBody');
+  const monthLabel = $('#monthLabel');
+  const prevMonthBtn = $('#prevMonth');
+  const nextMonthBtn = $('#nextMonth');
+  const todayBtn = $('#todayBtn');
+  const addColumnBtn = $('#addColumn');
+  const resetSizesBtn = $('#resetSizes');
+  const exportBtn = $('#exportJSON');
+  const importInput = $('#importJSON');
+  const headerTemplate = $('#headerTemplate');
 
-  const cellDialog = document.getElementById('cellDialog');
-  const cellTitle = document.getElementById('cellTitle');
-  const cellMemo = document.getElementById('cellMemo');
-  const saveCellBtn = document.getElementById('saveCell');
-  const clearCellBtn = document.getElementById('clearCell');
+  const cellDialog = $('#cellDialog');
+  const cellTitle = $('#cellTitle');
+  const cellMemo = $('#cellMemo');
+  const saveCellBtn = $('#saveCell');
+  const clearCellBtn = $('#clearCell');
 
-  // 状態
-  let state = loadState() || defaultStateForMonth(dayjs().format('YYYY-MM'));
+  let state = loadState() || defaultStateForMonth(fmtYM(new Date()));
   let activeCellKey = null; // "YYYY-MM-DD|colId"
 
   init();
 
   function defaultStateForMonth(monthStr){
-    // monthStr: "YYYY-MM"
     return {
-      version: 1,
+      version: 2,
       month: monthStr,
       columns: [
-        // ユーザー列（3列目以降）
-        { id: genId(), title: '予定1', width: 180 },
-        { id: genId(), title: '予定2', width: 180 }
+        { id: genId(), title: '予定1', width: 220 },
+        { id: genId(), title: '予定2', width: 220 }
       ],
       events: {}, // key: "date|colId" -> {title, memo}
-      // サイズ
-      dateColWidth: 150,
-      weekdayColWidth: 80,
-      rowHeights: {} // key: "YYYY-MM-DD" -> number
+      dateColWidth: 160,
+      weekdayColWidth: 100,
+      rowHeights: {}
     };
   }
 
   function init(){
-    // ユーティリティ導入（dayjs）
-    injectDayjs(() => {
-      render();
-      bindControls();
-    });
-  }
-
-  function injectDayjs(cb){
-    if (window.dayjs) { cb(); return; }
-    const s = document.createElement('script');
-    s.src = 'https://cdn.jsdelivr.net/npm/dayjs@1/dayjs.min.js';
-    s.onload = cb;
-    document.head.appendChild(s);
+    render();
+    bindControls();
   }
 
   function saveState(){
     localStorage.setItem('plannerState', JSON.stringify(state));
   }
-
   function loadState(){
-    try {
-      const raw = localStorage.getItem('plannerState');
-      return raw ? JSON.parse(raw) : null;
-    } catch(e){
-      return null;
-    }
+    try { return JSON.parse(localStorage.getItem('plannerState')); }
+    catch(e){ return null; }
+  }
+
+  function fmtYM(d){
+    const y = d.getFullYear();
+    const m = ('0' + (d.getMonth()+1)).slice(-2);
+    return `${y}-${m}`;
+  }
+  function fmtYMD(d){
+    const y = d.getFullYear();
+    const m = ('0' + (d.getMonth()+1)).slice(-2);
+    const da = ('0' + d.getDate()).slice(-2);
+    return `${y}-${m}-${da}`;
+  }
+
+  function monthStartEnd(monthStr){
+    const [y,m] = monthStr.split('-').map(Number);
+    const start = new Date(y, m-1, 1);
+    const end = new Date(y, m, 0);
+    return { start, end };
   }
 
   function setMonth(monthStr){
-    // monthStr: "YYYY-MM"
     state.month = monthStr;
-    // rowHeightsは月ごとに独立管理：既存を保持（必要なら月キーに分ける設計も可）
     render();
     saveState();
   }
 
-  function monthStartEnd(monthStr){
-    const start = dayjs(monthStr + '-01');
-    const end = start.endOf('month');
-    return { start, end };
+  function weekdayLabel(idx){
+    return ['日曜','月曜','火曜','水曜','木曜','金曜','土曜'][idx];
   }
 
   function render(){
-    // ヘッダー（固定2列 + 可変列）
-    monthLabel.textContent = dayjs(state.month + '-01').format('YYYY年 M月');
-    // 更新時に一旦固定2列の後を削除
-    while (headerRow.children.length > 2) headerRow.removeChild(headerRow.lastElementChild);
+    const monthStr = state.month;
+    const [y, m] = monthStr.split('-').map(Number);
+    monthLabel.textContent = `${y}年 ${m}月`;
 
-    // 固定列の幅を反映
+    // ヘッダー再構築
+    while (headerRow.children.length > 2) headerRow.removeChild(headerRow.lastElementChild);
     headerRow.children[0].style.width = state.dateColWidth + 'px';
     headerRow.children[1].style.width = state.weekdayColWidth + 'px';
     syncStickyLeftOffsets();
 
-    // 動的列
     state.columns.forEach(col => {
       const th = headerTemplate.content.firstElementChild.cloneNode(true);
       th.dataset.colId = col.id;
-      const content = th.querySelector('.th-content');
-      content.textContent = col.title || '予定';
-      th.style.width = (col.width || 180) + 'px';
+      th.style.width = (col.width || 220) + 'px';
+      th.querySelector('.th-title').textContent = col.title || '予定';
 
       // 列名編集
-      content.addEventListener('input', () => {
-        col.title = content.textContent.trim();
+      th.querySelector('.th-title').addEventListener('input', (e) => {
+        col.title = e.currentTarget.textContent.trim();
         saveState();
       });
 
       // 列削除
       th.querySelector('.delete-col').addEventListener('click', () => {
-        if (!confirm('この列を削除しますか？（中の予定も削除されます）')) return;
-        // イベント削除
-        const prefix = '|' + col.id;
-        for (const key of Object.keys(state.events)) {
-          if (key.endsWith(prefix)) delete state.events[key];
-        }
-        // 列配列から除去
+        if (!confirm('この列を削除しますか？（中の予定も削除）')) return;
+        const suffix = '|' + col.id;
+        Object.keys(state.events).forEach(k => { if (k.endsWith(suffix)) delete state.events[k]; });
         state.columns = state.columns.filter(c => c.id !== col.id);
         saveState();
         render();
       });
 
-      // 幅変更ハンドル
-      const resizer = th.querySelector('.col-resizer');
-      enableColResize(resizer, (newWidth) => {
-        col.width = Math.max(80, newWidth);
+      // 幅リサイズ
+      enableColResize(th.querySelector('.col-resizer'), (w) => {
+        col.width = Math.max(80, w);
         th.style.width = col.width + 'px';
         saveState();
       });
@@ -144,32 +126,29 @@
       headerRow.appendChild(th);
     });
 
-    // 本体
+    // 行生成
     tbody.innerHTML = '';
-    const {start, end} = monthStartEnd(state.month);
-    let d = start;
-    while (d.isBefore(end) || d.isSame(end, 'day')) {
+    const {start, end} = monthStartEnd(monthStr);
+    const d = new Date(start);
+    while (d <= end){
       const tr = document.createElement('tr');
       tr.className = 'row-wrapper';
-      const dateStr = d.format('YYYY-MM-DD');
+      const dateStr = fmtYMD(d);
 
-      // 左列：日にち
       const thDate = document.createElement('th');
       thDate.className = 'date-cell row-height';
       thDate.textContent = dateStr;
       thDate.style.width = state.dateColWidth + 'px';
       if (state.rowHeights[dateStr]) tr.style.setProperty('--row-height', state.rowHeights[dateStr] + 'px');
 
-      // 2列目：曜日
       const tdW = document.createElement('td');
       tdW.className = 'weekday-cell row-height';
-      tdW.textContent = weekdayLabel(d.day());
+      tdW.textContent = weekdayLabel(d.getDay());
       tdW.style.width = state.weekdayColWidth + 'px';
 
       tr.appendChild(thDate);
       tr.appendChild(tdW);
 
-      // 以降：ユーザー列
       state.columns.forEach(col => {
         const td = document.createElement('td');
         td.className = 'row-height';
@@ -190,21 +169,20 @@
         tr.appendChild(td);
       });
 
-      // 行高さリサイザ
       const rowResizer = document.createElement('div');
       rowResizer.className = 'row-resizer';
       tr.appendChild(rowResizer);
-      enableRowResize(rowResizer, dateStr, (newH) => {
-        state.rowHeights[dateStr] = Math.max(28, newH);
+      enableRowResize(rowResizer, dateStr, (h) => {
+        state.rowHeights[dateStr] = Math.max(28, h);
         tr.style.setProperty('--row-height', state.rowHeights[dateStr] + 'px');
         saveState();
       });
 
       tbody.appendChild(tr);
-      d = d.add(1, 'day');
+      d.setDate(d.getDate() + 1);
     }
 
-    // 固定列の幅を設定＆リサイズハンドラ
+    // 固定列のリサイズ
     document.querySelectorAll('th[data-col-fixed="date"] .col-resizer').forEach(res => {
       enableColResize(res, (w) => {
         state.dateColWidth = Math.max(100, w);
@@ -216,7 +194,7 @@
     });
     document.querySelectorAll('th[data-col-fixed="weekday"] .col-resizer').forEach(res => {
       enableColResize(res, (w) => {
-        state.weekdayColWidth = Math.max(60, w);
+        state.weekdayColWidth = Math.max(80, w);
         headerRow.children[1].style.width = state.weekdayColWidth + 'px';
         document.querySelectorAll('.weekday-cell').forEach(c => c.style.width = state.weekdayColWidth + 'px');
         syncStickyLeftOffsets();
@@ -225,32 +203,38 @@
     });
   }
 
-  function weekdayLabel(d){
-    const jp = ['日','月','火','水','木','金','土'];
-    return jp[d] + '曜';
-    // 英語が良ければ dayjs().format('ddd') などに変更可
+  function syncStickyLeftOffsets(){
+    const dateW = headerRow.children[0].getBoundingClientRect().width;
+    headerRow.children[0].style.left = '0px';
+    headerRow.children[1].style.left = dateW + 'px';
+    document.querySelectorAll('tbody th.date-cell').forEach(el => el.style.left = '0px');
+    document.querySelectorAll('tbody td.weekday-cell').forEach(el => el.style.left = dateW + 'px');
   }
 
   function bindControls(){
     prevMonthBtn.addEventListener('click', () => {
-      setMonth(dayjs(state.month + '-01').subtract(1, 'month').format('YYYY-MM'));
+      const [y, m] = state.month.split('-').map(Number);
+      const dt = new Date(y, m-2, 1);
+      setMonth(fmtYM(dt));
     });
     nextMonthBtn.addEventListener('click', () => {
-      setMonth(dayjs(state.month + '-01').add(1, 'month').format('YYYY-MM'));
+      const [y, m] = state.month.split('-').map(Number);
+      const dt = new Date(y, m, 1);
+      setMonth(fmtYM(dt));
     });
     todayBtn.addEventListener('click', () => {
-      setMonth(dayjs().format('YYYY-MM'));
+      setMonth(fmtYM(new Date()));
     });
     addColumnBtn.addEventListener('click', () => {
-      state.columns.push({ id: genId(), title: '予定', width: 180 });
+      state.columns.push({ id: genId(), title: '予定', width: 220 });
       saveState();
       render();
     });
     resetSizesBtn.addEventListener('click', () => {
       if (!confirm('列幅・行高を初期化しますか？')) return;
-      state.dateColWidth = 150;
-      state.weekdayColWidth = 80;
-      state.columns.forEach(c => c.width = 180);
+      state.dateColWidth = 160;
+      state.weekdayColWidth = 100;
+      state.columns.forEach(c => c.width = 220);
       state.rowHeights = {};
       saveState();
       render();
@@ -283,7 +267,6 @@
       e.target.value = '';
     });
 
-    // モーダル操作
     saveCellBtn.addEventListener('click', onSaveCell);
     clearCellBtn.addEventListener('click', onClearCell);
   }
@@ -296,53 +279,39 @@
     if (typeof cellDialog.showModal === 'function') {
       cellDialog.showModal();
     } else {
-      alert('このブラウザはdialogをサポートしていません。最新ブラウザをご利用ください。');
+      const title = prompt('タイトルを入力', cellTitle.value) || '';
+      const memo = prompt('メモを入力', cellMemo.value) || '';
+      applyCellEdit(title, memo);
     }
   }
-
-  function onSaveCell(evt){
-    // save title/memo
+  function onSaveCell(){
+    applyCellEdit(cellTitle.value.trim(), cellMemo.value.trim());
+  }
+  function onClearCell(){
+    applyCellEdit('', '');
+    cellTitle.value = '';
+    cellMemo.value = '';
+  }
+  function applyCellEdit(title, memo){
     if (!activeCellKey) return;
-    const title = cellTitle.value.trim();
-    const memo = cellMemo.value.trim();
-    if (!title && !memo){
-      delete state.events[activeCellKey];
-    } else {
-      state.events[activeCellKey] = { title, memo };
-    }
+    if (!title && !memo) { delete state.events[activeCellKey]; }
+    else { state.events[activeCellKey] = { title, memo }; }
     saveState();
-    // 画面上のセル表示更新
     const el = document.querySelector(`.cell[data-key="${cssEscape(activeCellKey)}"]`);
     if (el){
-      const titleSpan = el.querySelector('.cell-title');
-      titleSpan.textContent = title || '（タップで入力）';
+      el.querySelector('.cell-title').textContent = title || '（タップで入力）';
       el.classList.toggle('empty', !title);
     }
   }
 
-  function onClearCell(){
-    if (!activeCellKey) return;
-    delete state.events[activeCellKey];
-    saveState();
-    const el = document.querySelector(`.cell[data-key="${cssEscape(activeCellKey)}"]`);
-    if (el){
-      const titleSpan = el.querySelector('.cell-title');
-      titleSpan.textContent = '（タップで入力）';
-      el.classList.add('empty');
-    }
-    cellTitle.value = '';
-    cellMemo.value = '';
-  }
-
-  // --- リサイズ処理（列） ---
-  function enableColResize(handle, onResizeDone){
-    let startX, startWidth, thEl;
-
+  /* リサイズ */
+  function enableColResize(handle, onDone){
+    let startX, startW, th;
     const start = (e) => {
       e.preventDefault();
-      thEl = handle.closest('th');
-      startX = getClientX(e);
-      startWidth = thEl.getBoundingClientRect().width;
+      th = handle.closest('th');
+      startX = clientX(e);
+      startW = th.getBoundingClientRect().width;
       document.addEventListener('mousemove', move, { passive: false });
       document.addEventListener('mouseup', end, { passive: false });
       document.addEventListener('touchmove', move, { passive: false });
@@ -350,79 +319,63 @@
     };
     const move = (e) => {
       e.preventDefault();
-      const dx = getClientX(e) - startX;
-      const w = Math.max(60, Math.round(startWidth + dx));
-      thEl.style.width = w + 'px';
-      // 固定列はbody側も更新（描画中は見た目だけ合わせる）
-      if (thEl.dataset.colFixed === 'date') {
+      const dx = clientX(e) - startX;
+      const w = Math.max(80, Math.round(startW + dx));
+      th.style.width = w + 'px';
+      if (th.dataset.colFixed === 'date') {
         document.querySelectorAll('.date-cell').forEach(c => c.style.width = w + 'px');
         syncStickyLeftOffsets();
-      } else if (thEl.dataset.colFixed === 'weekday') {
+      } else if (th.dataset.colFixed === 'weekday') {
         document.querySelectorAll('.weekday-cell').forEach(c => c.style.width = w + 'px');
         syncStickyLeftOffsets();
       }
-    };
-    const end = (e) => {
-      document.removeEventListener('mousemove', move);
-      document.removeEventListener('mouseup', end);
-      document.removeEventListener('touchmove', move);
-      document.removeEventListener('touchend', end);
-      const finalWidth = Math.round(thEl.getBoundingClientRect().width);
-      onResizeDone(finalWidth);
-    };
-    handle.addEventListener('mousedown', start);
-    handle.addEventListener('touchstart', start, { passive: false });
-  }
-
-  function syncStickyLeftOffsets(){
-    const dateWidth = headerRow.children[0].getBoundingClientRect().width;
-    const weekdayWidth = headerRow.children[1].getBoundingClientRect().width;
-    // header
-    headerRow.children[0].style.left = '0px';
-    headerRow.children[1].style.left = dateWidth + 'px';
-    // body
-    document.querySelectorAll('tbody th.date-cell').forEach(el => el.style.left = '0px');
-    document.querySelectorAll('tbody td.weekday-cell').forEach(el => el.style.left = dateWidth + 'px');
-  }
-
-  // --- リサイズ処理（行） ---
-  function enableRowResize(handle, dateStr, onResizeDone){
-    let startY, startH, trEl;
-
-    const start = (e) => {
-      e.preventDefault();
-      trEl = handle.closest('tr');
-      startY = getClientY(e);
-      startH = trEl.getBoundingClientRect().height;
-      document.addEventListener('mousemove', move, { passive: false });
-      document.addEventListener('mouseup', end, { passive: false });
-      document.addEventListener('touchmove', move, { passive: false });
-      document.addEventListener('touchend', end, { passive: false });
-    };
-    const move = (e) => {
-      e.preventDefault();
-      const dy = getClientY(e) - startY;
-      const h = Math.max(28, Math.round(startH + dy));
-      trEl.style.setProperty('--row-height', h + 'px');
     };
     const end = () => {
       document.removeEventListener('mousemove', move);
       document.removeEventListener('mouseup', end);
       document.removeEventListener('touchmove', move);
       document.removeEventListener('touchend', end);
-      const finalH = Math.round(parseFloat(getComputedStyle(trEl).getPropertyValue('--row-height')) || trEl.getBoundingClientRect().height);
-      onResizeDone(finalH);
+      const finalW = Math.round(th.getBoundingClientRect().width);
+      onDone(finalW);
     };
     handle.addEventListener('mousedown', start);
     handle.addEventListener('touchstart', start, { passive: false });
   }
 
-  // --- セルキー／ユーティリティ ---
-  function genId(){
-    return Math.random().toString(36).slice(2, 10);
+  function enableRowResize(handle, dateStr, onDone){
+    let startY, startH, tr;
+    const start = (e) => {
+      e.preventDefault();
+      tr = handle.closest('tr');
+      startY = clientY(e);
+      startH = tr.getBoundingClientRect().height;
+      document.addEventListener('mousemove', move, { passive: false });
+      document.addEventListener('mouseup', end, { passive: false });
+      document.addEventListener('touchmove', move, { passive: false });
+      document.addEventListener('touchend', end, { passive: false });
+    };
+    const move = (e) => {
+      e.preventDefault();
+      const dy = clientY(e) - startY;
+      const h = Math.max(28, Math.round(startH + dy));
+      tr.style.setProperty('--row-height', h + 'px');
+    };
+    const end = () => {
+      document.removeEventListener('mousemove', move);
+      document.removeEventListener('mouseup', end);
+      document.removeEventListener('touchmove', move);
+      document.removeEventListener('touchend', end);
+      const finalH = Math.round(parseFloat(getComputedStyle(tr).getPropertyValue('--row-height')) || tr.getBoundingClientRect().height);
+      onDone(finalH);
+    };
+    handle.addEventListener('mousedown', start);
+    handle.addEventListener('touchstart', start, { passive: false });
   }
-  function getClientX(e){ return e.touches ? e.touches[0].clientX : e.clientX; }
-  function getClientY(e){ return e.touches ? e.touches[0].clientY : e.clientY; }
+
+  /* Utils */
+  function genId(){ return Math.random().toString(36).slice(2, 10); }
+  function clientX(e){ return e.touches ? e.touches[0].clientX : e.clientX; }
+  function clientY(e){ return e.touches ? e.touches[0].clientY : e.clientY; }
   function cssEscape(s){ return s.replace(/["\\]/g, '\\$&'); }
 
 })();

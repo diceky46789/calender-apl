@@ -1,39 +1,29 @@
-/* Basic reset */
+/* 画面全体 */
 * { box-sizing: border-box; }
 html, body { height: 100%; }
 body {
   margin: 0;
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Hiragino Kaku Gothic ProN", "Noto Sans JP", "Yu Gothic", "Meiryo", sans-serif;
-  color: #1f2937;
-  background: #f8fafc;
+  color: #111827;
+  background: #f7fafc;
 }
 
+/* ヘッダー */
 .app-header {
   position: sticky;
   top: 0;
+  z-index: 20;
   background: #fff;
   border-bottom: 1px solid #e5e7eb;
-  padding: 10px;
+  padding: 10px 12px;
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
   flex-wrap: wrap;
-  z-index: 5;
 }
-.app-header h1 {
-  font-size: 18px;
-  margin: 0 8px 0 0;
-}
-.controls {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-.controls #monthLabel {
-  font-weight: 600;
-  margin: 0 8px;
-}
+.app-header h1 { font-size: 18px; margin: 0 8px 0 0; }
+.controls { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.controls .month-label { font-weight: 700; margin: 0 8px; }
 .controls button, .controls label.import-label {
   background: #111827;
   color: #fff;
@@ -46,69 +36,73 @@ body {
 .controls button:hover { opacity: 0.9; }
 .import-label input { display: none; }
 
+/* テーブルラッパ */
 #tableWrapper {
   overflow: auto;
   width: 100%;
   height: calc(100vh - 80px);
   border-top: 1px solid #e5e7eb;
-}
-
-table {
-  border-collapse: separate;
-  border-spacing: 0;
-  width: 100%;
-  min-width: 800px;
   background: #fff;
 }
 
+/* テーブル（はっきりした表罫線） */
+table {
+  border-collapse: collapse;
+  width: 100%;
+  min-width: 900px;
+  table-layout: fixed;
+}
+thead th, tbody td, tbody th {
+  border: 1px solid #d1d5db;
+}
 thead th {
   position: sticky;
   top: 0;
-  background: #f1f5f9;
-  border-bottom: 1px solid #e5e7eb;
+  z-index: 15;
+  background: #eef2f7;
   text-align: left;
   padding: 8px;
   font-size: 14px;
-  z-index: 3;
 }
 
+/* 左固定列 */
 th.sticky-left {
   position: sticky;
   left: 0;
-  z-index: 4;
-  background: #f1f5f9;
+  z-index: 16;
+  background: #eef2f7;
 }
 
+/* 2列目も固定（左幅はJSで同期） */
 th.sticky-left + th.sticky-left {
-  left: 150px; /* will be updated by JS to match widths */
+  left: 160px; /* JSで上書き */
 }
 
-tbody td, tbody th {
-  border-bottom: 1px solid #f1f5f9;
-  border-right: 1px solid #f1f5f9;
-  padding: 6px 8px;
-  vertical-align: top;
-  background: #fff;
-}
-
+/* 本体セル */
 tbody th.date-cell {
   position: sticky;
   left: 0;
+  z-index: 10;
   background: #fff;
-  z-index: 2;
   font-weight: 600;
-  width: 150px;
+  width: 160px;
 }
-
 tbody td.weekday-cell {
   position: sticky;
-  left: 150px; /* Sync with first column width */
-  z-index: 2;
+  left: 160px; /* JSで上書き */
+  z-index: 10;
   background: #fff;
-  width: 80px;
+  width: 100px;
   color: #6b7280;
+  font-weight: 600;
 }
 
+tbody td, tbody th {
+  padding: 6px 8px;
+  vertical-align: top;
+}
+
+/* セル中身 */
 .cell {
   min-height: 36px;
   outline: none;
@@ -117,20 +111,16 @@ tbody td.weekday-cell {
   line-height: 1.4;
   cursor: text;
 }
-
 .cell-title {
   display: block;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
-
 .cell.empty .cell-title { color: #9ca3af; }
 
-.resizable {
-  position: relative;
-}
-
+/* 列幅ドラッグ */
+.resizable { position: relative; }
 .col-resizer {
   position: absolute;
   right: 0;
@@ -141,6 +131,8 @@ tbody td.weekday-cell {
   user-select: none;
 }
 
+/* 行高さドラッグ */
+.row-wrapper { position: relative; }
 .row-resizer {
   position: absolute;
   left: 0;
@@ -151,29 +143,20 @@ tbody td.weekday-cell {
   user-select: none;
 }
 
-.row-wrapper {
-  position: relative;
-}
-
+/* 列操作 */
+.th-inner { display: flex; align-items: center; gap: 6px; padding-right: 20px; }
+.th-title { flex: 1; font-weight: 700; }
 .delete-col {
   position: absolute;
-  right: 8px;
-  top: 6px;
-  border: none;
-  background: transparent;
-  color: #6b7280;
-  font-size: 16px;
-  line-height: 1;
-  cursor: pointer;
+  top: 6px; right: 12px;
+  border: none; background: transparent; color: #6b7280; font-size: 16px; cursor: pointer;
 }
-
 .delete-col:hover { color: #ef4444; }
 
-/* Dialog */
+/* ダイアログ */
 dialog::backdrop { background: rgba(0,0,0,0.25); }
 dialog {
-  border: none;
-  border-radius: 12px;
+  border: none; border-radius: 12px;
   width: min(560px, 92vw);
   padding: 16px 18px;
 }
@@ -187,33 +170,18 @@ dialog h3 { margin: 0 0 8px; }
   font-size: 14px;
 }
 dialog menu {
-  display: flex;
-  gap: 10px;
-  justify-content: flex-end;
-  padding: 0;
-  margin: 10px 0 0;
+  display: flex; gap: 10px; justify-content: flex-end;
+  padding: 0; margin: 10px 0 0;
 }
 dialog button {
-  background: #111827;
-  color: #fff;
-  border: none;
-  border-radius: 10px;
-  padding: 8px 12px;
-  cursor: pointer;
+  background: #111827; color: #fff; border: none; border-radius: 10px;
+  padding: 8px 12px; cursor: pointer;
 }
-dialog button[value="cancel"] {
-  background: #6b7280;
-}
+dialog button[value="cancel"] { background: #6b7280; }
 
-.header-placeholder {
-  color: #6b7280;
-}
+/* 行の高さはCSS変数で */
+.row-height { height: var(--row-height, 44px); }
 
-.row-height {
-  height: var(--row-height, 44px);
-}
-
-/* Small screens */
 @media (max-width: 720px) {
   thead th, tbody td, tbody th { padding: 6px; }
 }
