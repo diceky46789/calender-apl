@@ -20,6 +20,10 @@
       <label class="import-label">
         インポート <input type="file" id="importJSON" accept="application/json" />
       </label>
+      <label class="toggles">
+        <input type="checkbox" id="compactToggle" /> コンパクト表示
+      </label>
+      <button id="enableNotify">🔔 通知を有効化</button>
     </div>
   </header>
 
@@ -29,11 +33,11 @@
         <thead>
           <tr id="headerRow">
             <th class="sticky-left" data-col-fixed="date">
-              日にち
+              <span class="hdr-date">日付</span>
               <div class="col-resizer" title="ドラッグで幅変更"></div>
             </th>
             <th class="sticky-left" data-col-fixed="weekday">
-              曜日
+              <span class="hdr-week">曜</span>
               <div class="col-resizer" title="ドラッグで幅変更"></div>
             </th>
             <!-- 3列目以降はJSで生成 -->
@@ -50,6 +54,7 @@
   <dialog id="cellDialog">
     <form method="dialog" id="cellForm">
       <h3>予定の編集</h3>
+
       <div class="grid2">
         <div class="field">
           <label for="cellTitle">タイトル</label>
@@ -80,6 +85,17 @@
         <div class="field">
           <label for="endTime">終了時間</label>
           <input type="time" id="endTime" />
+        </div>
+      </div>
+
+      <div class="grid2">
+        <div class="field">
+          <label><input type="checkbox" id="notifyEnabled" /> この予定を通知</label>
+          <small class="hint">※通知時刻が未設定の場合、開始時間または09:00で通知します。</small>
+        </div>
+        <div class="field">
+          <label for="notifyTime">通知時刻</label>
+          <input type="time" id="notifyTime" />
         </div>
       </div>
 

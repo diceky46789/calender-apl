@@ -24,7 +24,7 @@ body {
 .app-header h1 { font-size: 18px; margin: 0 8px 0 0; }
 .controls { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .controls .month-label { font-weight: 700; margin: 0 8px; }
-.controls button, .controls label.import-label {
+.controls button, .controls label.import-label, .controls .toggles {
   background: #111827;
   color: #fff;
   border: none;
@@ -33,14 +33,16 @@ body {
   font-size: 14px;
   cursor: pointer;
 }
-.controls button:hover { opacity: 0.9; }
+.controls .toggles { display: inline-flex; align-items: center; gap: 6px; }
+.controls .toggles input { accent-color: #111827; }
+.controls label.import-label { cursor: pointer; }
 .import-label input { display: none; }
 
 /* テーブルラッパ */
 #tableWrapper {
   overflow: auto;
   width: 100%;
-  height: calc(100vh - 80px);
+  height: calc(100vh - 90px);
   border-top: 1px solid #e5e7eb;
   background: #fff;
 }
@@ -61,8 +63,9 @@ thead th {
   z-index: 15;
   background: #eef2f7;
   text-align: left;
-  padding: 8px;
-  font-size: 14px;
+  padding: 6px 8px;
+  font-size: 13px;
+  white-space: nowrap;
 }
 
 /* 左固定列 */
@@ -75,7 +78,7 @@ th.sticky-left {
 
 /* 2列目も固定（左幅はJSで同期） */
 th.sticky-left + th.sticky-left {
-  left: 180px; /* JSで上書き */
+  left: 120px; /* JSで上書き */
 }
 
 /* 本体セル */
@@ -85,31 +88,34 @@ tbody th.date-cell {
   z-index: 10;
   background: #fff;
   font-weight: 600;
-  width: 180px;
+  width: 120px;
+  font-variant-numeric: tabular-nums;
 }
 tbody td.weekday-cell {
   position: sticky;
-  left: 180px; /* JSで上書き */
+  left: 120px; /* JSで上書き */
   z-index: 10;
   background: #fff;
-  width: 110px;
+  width: 70px;
   color: #6b7280;
   font-weight: 600;
+  text-align: center;
 }
 
 tbody td, tbody th {
-  padding: 6px 8px;
+  padding: 4px 6px;
   vertical-align: top;
 }
 
 /* セル中身 */
 .cell {
-  min-height: 36px;
+  min-height: 30px;
   outline: none;
   border-radius: 6px;
-  padding: 4px 6px;
+  padding: 2px 4px;
   line-height: 1.4;
   cursor: text;
+  position: relative;
 }
 .cell-title {
   display: block;
@@ -118,6 +124,37 @@ tbody td, tbody th {
   text-overflow: ellipsis;
 }
 .cell.empty .cell-title { color: #9ca3af; }
+
+/* 縦矢印（スパン予定の視覚化） */
+.span-chip {
+  position: absolute;
+  left: 6px;
+  top: 2px;
+  bottom: 2px;
+  width: 10px;
+}
+.span-chip .line {
+  position: absolute;
+  left: 4px;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: #2563eb;
+  border-radius: 1px;
+}
+.span-chip.start .line { top: 50%; }   /* 上半分なし（開始） */
+.span-chip.end .line { bottom: 50%; }  /* 下半分なし（終了） */
+.span-chip.single .line { top: 50%; bottom: 50%; } /* 単日：小さな点 */
+
+.span-chip.end::after {
+  content: "";
+  position: absolute;
+  left: 2px;
+  bottom: -1px;
+  border-left: 4px solid transparent;
+  border-right: 4px solid transparent;
+  border-top: 6px solid #2563eb; /* 下向きの矢印頭 */
+}
 
 /* 列幅ドラッグ */
 .resizable { position: relative; }
@@ -148,7 +185,7 @@ tbody td, tbody th {
 .th-title { flex: 1; font-weight: 700; }
 .delete-col {
   position: absolute;
-  top: 6px; right: 12px;
+  top: 4px; right: 10px;
   border: none; background: transparent; color: #6b7280; font-size: 16px; cursor: pointer;
 }
 .delete-col:hover { color: #ef4444; }
@@ -157,12 +194,12 @@ tbody td, tbody th {
 dialog::backdrop { background: rgba(0,0,0,0.25); }
 dialog {
   border: none; border-radius: 12px;
-  width: min(680px, 96vw);
+  width: min(700px, 96vw);
   padding: 16px 18px;
 }
 dialog h3 { margin: 0 0 8px; }
-.field { display: grid; gap: 6px; margin: 10px 0; }
-.field input, .field textarea {
+.field { display: grid; gap: 6px; margin: 8px 0; }
+.field input, .field textarea, .field select {
   width: 100%;
   padding: 8px 10px;
   border: 1px solid #e5e7eb;
@@ -183,9 +220,9 @@ dialog button {
 dialog button[value="cancel"] { background: #6b7280; }
 
 /* 行の高さはCSS変数で */
-.row-height { height: var(--row-height, 44px); }
+.row-height { height: var(--row-height, 36px); }
 
 @media (max-width: 720px) {
-  thead th, tbody td, tbody th { padding: 6px; }
+  thead th, tbody td, tbody th { padding: 4px; }
   .grid2 { grid-template-columns: 1fr; }
 }
