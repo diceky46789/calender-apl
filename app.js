@@ -1,4 +1,4 @@
-// 表カレンダー手帳 v4（スパン矢印 + 通知 + コンパクト表示）
+// v4.1: sticky列の重なり/幅ゼロ問題を修正（z-index強化、最小幅Clamp、リサイズ時の再計算）
 (function(){
   'use strict';
 
@@ -36,14 +36,13 @@
   let activeCellDate = null;
   let activeColId = null;
 
-  // 通知の既読状態
   let notifiedMap = loadNotifiedMap();
 
   init();
 
   function defaultStateForMonth(monthStr){
     return {
-      version: 4,
+      version: 41,
       month: monthStr,
       columns: [
         { id: genId(), title: '予定1', width: 240 },
@@ -60,23 +59,31 @@
   function migrate(s){
     if (!s) return null;
     if (!s.version) s.version = 1;
-    if (s.version < 3){
-      s.version = 3;
+    // v1-3 -> v4相当
+    if (s.version < 4){
       s.dateColWidth = s.dateColWidth || 180;
       s.weekdayColWidth = s.weekdayColWidth || 110;
-    }
-    if (s.version === 3){
-      s.version = 4;
       s.compact = true;
-      s.dateColWidth = Math.min(s.dateColWidth || 180, 120);
-      s.weekdayColWidth = Math.min(s.weekdayColWidth || 110, 70);
+      s.version = 4;
     }
+    // v4 -> v4.1
+    if (s.version === 4){
+      s.version = 41;
+    }
+    // 幅が壊れている場合のガード
+    s.dateColWidth = clamp(s.dateColWidth, 70, 400);
+    s.weekdayColWidth = clamp(s.weekdayColWidth, 40, 300);
     return s;
   }
 
-  function saveState(){
-    localStorage.setItem('plannerState', JSON.stringify(state));
+  function clamp(v, min, max){
+    v = Number(v) || 0;
+    if (v < min) return min;
+    if (v > max) return max;
+    return v;
   }
+
+  function saveState(){ localStorage.setItem('plannerState', JSON.stringify(state)); }
   function loadState(){
     try { return JSON.parse(localStorage.getItem('plannerState')); }
     catch(e){ return null; }
@@ -90,29 +97,14 @@
     localStorage.setItem('plannerNotifiedMap', JSON.stringify(notifiedMap));
   }
 
-  function fmtYM(d){
-    const y = d.getFullYear();
-    const m = ('0' + (d.getMonth()+1)).slice(-2);
-    return `${y}-${m}`;
-  }
-  function fmtYMD(d){
-    const y = d.getFullYear();
-    const m = ('0' + (d.getMonth()+1)).slice(-2);
-    const da = ('0' + d.getDate()).slice(-2);
-    return `${y}-${m}-${da}`;
-  }
+  function fmtYM(d){ const y=d.getFullYear(), m=('0'+(d.getMonth()+1)).slice(-2); return `${y}-${m}`; }
+  function fmtYMD(d){ const y=d.getFullYear(), m=('0'+(d.getMonth()+1)).slice(-2), da=('0'+d.getDate()).slice(-2); return `${y}-${m}-${da}`; }
   function addDays(dateStr, n){
     const [y,m,d] = dateStr.split('-').map(Number);
-    const dt = new Date(y, m-1, d);
-    dt.setDate(dt.getDate() + n);
-    return fmtYMD(dt);
+    const dt = new Date(y, m-1, d); dt.setDate(dt.getDate()+n); return fmtYMD(dt);
   }
   function eachDateInclusive(startStr, endStr, cb){
-    let cur = startStr;
-    while (cur <= endStr){
-      cb(cur);
-      cur = addDays(cur, 1);
-    }
+    let cur = startStr; while (cur <= endStr){ cb(cur); cur = addDays(cur,1); }
   }
 
   function monthStartEnd(monthStr){
@@ -146,6 +138,10 @@
     monthLabel.textContent = `${y}年 ${m}月`;
     compactToggle.checked = !!state.compact;
 
+    // 破損幅をここでもClamp
+    state.dateColWidth = clamp(state.dateColWidth, 70, 400);
+    state.weekdayColWidth = clamp(state.weekdayColWidth, 40, 300);
+
     // ヘッダー再構築
     while (headerRow.children.length > 2) headerRow.removeChild(headerRow.lastElementChild);
     headerRow.children[0].style.width = state.dateColWidth + 'px';
@@ -155,16 +151,14 @@
     state.columns.forEach(col => {
       const th = headerTemplate.content.firstElementChild.cloneNode(true);
       th.dataset.colId = col.id;
-      th.style.width = (col.width || 240) + 'px';
+      th.style.width = clamp(col.width || 240, 80, 800) + 'px';
       th.querySelector('.th-title').textContent = col.title || '予定';
 
-      // 列名編集
       th.querySelector('.th-title').addEventListener('input', (e) => {
         col.title = e.currentTarget.textContent.trim();
         saveState();
       });
 
-      // 列削除
       th.querySelector('.delete-col').addEventListener('click', () => {
         if (!confirm('この列を削除しますか？（中の予定も削除）')) return;
         const suffix = '|' + col.id;
@@ -174,9 +168,8 @@
         render();
       });
 
-      // 幅リサイズ
       enableColResize(th.querySelector('.col-resizer'), (w) => {
-        col.width = Math.max(80, w);
+        col.width = clamp(w, 80, 800);
         th.style.width = col.width + 'px';
         saveState();
       });
@@ -220,7 +213,6 @@
         div.dataset.date = dateStr;
         div.dataset.colId = col.id;
 
-        // スパン矢印
         if (data && data.spanId && data.spanStart && data.spanEnd){
           const chip = document.createElement('div');
           chip.className = 'span-chip';
@@ -243,7 +235,7 @@
         span.textContent = formatTitle(data);
         div.appendChild(span);
 
-        div.addEventListener('click', (e) => openCellEditor(key, dateStr, col.id));
+        div.addEventListener('click', () => openCellEditor(key, dateStr, col.id));
         td.appendChild(div);
         tr.appendChild(td);
       });
@@ -252,7 +244,7 @@
       rowResizer.className = 'row-resizer';
       tr.appendChild(rowResizer);
       enableRowResize(rowResizer, dateStr, (h) => {
-        state.rowHeights[dateStr] = Math.max(28, h);
+        state.rowHeights[dateStr] = Math.max(24, h);
         tr.style.setProperty('--row-height', state.rowHeights[dateStr] + 'px');
         saveState();
       });
@@ -264,7 +256,7 @@
     // 固定列のリサイズ
     document.querySelectorAll('th[data-col-fixed="date"] .col-resizer').forEach(res => {
       enableColResize(res, (w) => {
-        state.dateColWidth = Math.max(70, w);
+        state.dateColWidth = clamp(w, 70, 400);
         headerRow.children[0].style.width = state.dateColWidth + 'px';
         document.querySelectorAll('.date-cell').forEach(c => c.style.width = state.dateColWidth + 'px');
         syncStickyLeftOffsets();
@@ -273,7 +265,7 @@
     });
     document.querySelectorAll('th[data-col-fixed="weekday"] .col-resizer').forEach(res => {
       enableColResize(res, (w) => {
-        state.weekdayColWidth = Math.max(40, w);
+        state.weekdayColWidth = clamp(w, 40, 300);
         headerRow.children[1].style.width = state.weekdayColWidth + 'px';
         document.querySelectorAll('.weekday-cell').forEach(c => c.style.width = state.weekdayColWidth + 'px');
         syncStickyLeftOffsets();
@@ -313,13 +305,10 @@
       const dt = new Date(y, m, 1);
       setMonth(fmtYM(dt));
     });
-    todayBtn.addEventListener('click', () => {
-      setMonth(fmtYM(new Date()));
-    });
+    todayBtn.addEventListener('click', () => setMonth(fmtYM(new Date())));
     addColumnBtn.addEventListener('click', () => {
       state.columns.push({ id: genId(), title: '予定', width: 240 });
-      saveState();
-      render();
+      saveState(); render();
     });
     resetSizesBtn.addEventListener('click', () => {
       if (!confirm('列幅・行高を初期化しますか？')) return;
@@ -327,8 +316,7 @@
       state.weekdayColWidth = 70;
       state.columns.forEach(c => c.width = 240);
       state.rowHeights = {};
-      saveState();
-      render();
+      saveState(); render();
     });
     exportBtn.addEventListener('click', () => {
       const blob = new Blob([JSON.stringify(state, null, 2)], {type: 'application/json'});
@@ -348,8 +336,7 @@
           const obj = JSON.parse(reader.result);
           if (!obj || typeof obj !== 'object' || !obj.month) throw new Error('不正なファイルです');
           state = migrate(obj);
-          saveState();
-          render();
+          saveState(); render();
         } catch (err) {
           alert('JSONの読み込みに失敗しました: ' + err.message);
         }
@@ -365,13 +352,16 @@
         state.dateColWidth = Math.min(state.dateColWidth, 120);
         state.weekdayColWidth = Math.min(state.weekdayColWidth, 70);
       }
-      saveState();
-      render();
+      saveState(); render();
     });
 
     saveCellBtn.addEventListener('click', onSaveCell);
     clearCellBtn.addEventListener('click', onClearCell);
     clearSpanBtn.addEventListener('click', onClearSpan);
+
+    // サイズ変化に伴う位置再計算
+    window.addEventListener('resize', syncStickyLeftOffsets);
+    document.querySelector('#tableWrapper').addEventListener('scroll', syncStickyLeftOffsets, { passive: true });
   }
 
   /* ---- 編集ダイアログ ---- */
@@ -482,7 +472,6 @@
       const d = cell.dataset.date;
       const key = d + '|' + colId;
       const data = state.events[key];
-      // 既存のspan-chip除去
       cell.querySelectorAll('.span-chip').forEach(n => n.remove());
       if (data && data.spanId && data.spanStart && data.spanEnd){
         const chip = document.createElement('div');
@@ -655,13 +644,12 @@
     handle.addEventListener('touchstart', start, { passive: false });
   }
 
-  /* Utils */
   function genId(){ return Math.random().toString(36).slice(2, 10); }
   function clientX(e){ return e.touches ? e.touches[0].clientX : e.clientX; }
   function clientY(e){ return e.touches ? e.touches[0].clientY : e.clientY; }
   function cssEscape(s){ return s.replace(/["\\]/g, '\\$&'); }
 
-  // 起動
+  // 初期起動
   render();
   bindControls();
 

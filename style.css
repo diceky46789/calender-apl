@@ -12,7 +12,7 @@ body {
 .app-header {
   position: sticky;
   top: 0;
-  z-index: 20;
+  z-index: 200;
   background: #fff;
   border-bottom: 1px solid #e5e7eb;
   padding: 10px 12px;
@@ -60,7 +60,7 @@ thead th, tbody td, tbody th {
 thead th {
   position: sticky;
   top: 0;
-  z-index: 15;
+  z-index: 150;
   background: #eef2f7;
   text-align: left;
   padding: 6px 8px;
@@ -72,7 +72,7 @@ thead th {
 th.sticky-left {
   position: sticky;
   left: 0;
-  z-index: 16;
+  z-index: 160; /* ヘッダーより下だが他セルより上 */
   background: #eef2f7;
 }
 
@@ -85,21 +85,24 @@ th.sticky-left + th.sticky-left {
 tbody th.date-cell {
   position: sticky;
   left: 0;
-  z-index: 10;
+  z-index: 120; /* 通常セルより上に上げる */
   background: #fff;
+  color: #111827;
   font-weight: 600;
   width: 120px;
+  min-width: 70px;
   font-variant-numeric: tabular-nums;
 }
 tbody td.weekday-cell {
   position: sticky;
   left: 120px; /* JSで上書き */
-  z-index: 10;
+  z-index: 120;
   background: #fff;
+  color: #374151;
   width: 70px;
-  color: #6b7280;
-  font-weight: 600;
+  min-width: 40px;
   text-align: center;
+  font-weight: 600;
 }
 
 tbody td, tbody th {
@@ -116,6 +119,8 @@ tbody td, tbody th {
   line-height: 1.4;
   cursor: text;
   position: relative;
+  background: transparent;
+  color: inherit;
 }
 .cell-title {
   display: block;
@@ -132,6 +137,7 @@ tbody td, tbody th {
   top: 2px;
   bottom: 2px;
   width: 10px;
+  pointer-events: none;
 }
 .span-chip .line {
   position: absolute;
