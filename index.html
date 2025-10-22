@@ -16,6 +16,7 @@
       <span id="monthLabel" class="month-label"></span>
       <button id="addColumn">列を追加</button>
       <button id="resetSizes">幅/高さ 初期化</button>
+      <button id="resetData">データ初期化</button>
       <button id="exportJSON">エクスポート</button>
       <label class="import-label">
         インポート <input type="file" id="importJSON" accept="application/json" />
@@ -30,6 +31,11 @@
   <main>
     <div id="tableWrapper">
       <table id="plannerTable" aria-label="表カレンダー">
+        <colgroup id="colgroup">
+          <col id="col-date" />
+          <col id="col-week" />
+          <!-- 動的列はJSで追加 -->
+        </colgroup>
         <thead>
           <tr id="headerRow">
             <th class="sticky-left" data-col-fixed="date">
@@ -50,7 +56,7 @@
     </div>
   </main>
 
-  <!-- セル編集ダイアログ（v4のまま） -->
+  <!-- セル編集ダイアログ（同等） -->
   <dialog id="cellDialog">
     <form method="dialog" id="cellForm">
       <h3>予定の編集</h3>

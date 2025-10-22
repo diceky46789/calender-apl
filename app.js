@@ -1,9 +1,12 @@
-// v4.1: sticky列の重なり/幅ゼロ問題を修正（z-index強化、最小幅Clamp、リサイズ時の再計算）
+// v4.2: colgroupで幅管理 + セーフモード再描画 + データ初期化ボタン
 (function(){
   'use strict';
 
   const $ = sel => document.querySelector(sel);
   const headerRow = $('#headerRow');
+  const colgroup = $('#colgroup');
+  const colDate = $('#col-date');
+  const colWeek = $('#col-week');
   const tbody = $('#tableBody');
   const monthLabel = $('#monthLabel');
   const prevMonthBtn = $('#prevMonth');
@@ -11,6 +14,7 @@
   const todayBtn = $('#todayBtn');
   const addColumnBtn = $('#addColumn');
   const resetSizesBtn = $('#resetSizes');
+  const resetDataBtn = $('#resetData');
   const exportBtn = $('#exportJSON');
   const importInput = $('#importJSON');
   const headerTemplate = $('#headerTemplate');
@@ -32,23 +36,22 @@
   const scopeRow = $('#scopeRow');
 
   let state = migrate(loadState()) || defaultStateForMonth(fmtYM(new Date()));
-  let activeCellKey = null; // "YYYY-MM-DD|colId"
+  let activeCellKey = null;
   let activeCellDate = null;
   let activeColId = null;
-
   let notifiedMap = loadNotifiedMap();
 
   init();
 
   function defaultStateForMonth(monthStr){
     return {
-      version: 41,
+      version: 42,
       month: monthStr,
       columns: [
         { id: genId(), title: '予定1', width: 240 },
         { id: genId(), title: '予定2', width: 240 }
       ],
-      events: {}, // key: "date|colId" -> {title, memo, startTime, endTime, spanId?, spanStart?, spanEnd?, notify?, notifyTime?}
+      events: {},
       dateColWidth: 120,
       weekdayColWidth: 70,
       rowHeights: {},
@@ -59,18 +62,13 @@
   function migrate(s){
     if (!s) return null;
     if (!s.version) s.version = 1;
-    // v1-3 -> v4相当
     if (s.version < 4){
       s.dateColWidth = s.dateColWidth || 180;
       s.weekdayColWidth = s.weekdayColWidth || 110;
       s.compact = true;
       s.version = 4;
     }
-    // v4 -> v4.1
-    if (s.version === 4){
-      s.version = 41;
-    }
-    // 幅が壊れている場合のガード
+    if (s.version <= 41) s.version = 42;
     s.dateColWidth = clamp(s.dateColWidth, 70, 400);
     s.weekdayColWidth = clamp(s.weekdayColWidth, 40, 300);
     return s;
@@ -84,197 +82,195 @@
   }
 
   function saveState(){ localStorage.setItem('plannerState', JSON.stringify(state)); }
-  function loadState(){
-    try { return JSON.parse(localStorage.getItem('plannerState')); }
-    catch(e){ return null; }
-  }
+  function loadState(){ try { return JSON.parse(localStorage.getItem('plannerState')); } catch(e){ return null; } }
 
-  function loadNotifiedMap(){
-    try { return JSON.parse(localStorage.getItem('plannerNotifiedMap')) || {}; }
-    catch(e){ return {}; }
-  }
-  function saveNotifiedMap(){
-    localStorage.setItem('plannerNotifiedMap', JSON.stringify(notifiedMap));
-  }
+  function loadNotifiedMap(){ try { return JSON.parse(localStorage.getItem('plannerNotifiedMap')) || {}; } catch(e){ return {}; } }
+  function saveNotifiedMap(){ localStorage.setItem('plannerNotifiedMap', JSON.stringify(notifiedMap)); }
 
   function fmtYM(d){ const y=d.getFullYear(), m=('0'+(d.getMonth()+1)).slice(-2); return `${y}-${m}`; }
   function fmtYMD(d){ const y=d.getFullYear(), m=('0'+(d.getMonth()+1)).slice(-2), da=('0'+d.getDate()).slice(-2); return `${y}-${m}-${da}`; }
-  function addDays(dateStr, n){
-    const [y,m,d] = dateStr.split('-').map(Number);
-    const dt = new Date(y, m-1, d); dt.setDate(dt.getDate()+n); return fmtYMD(dt);
-  }
-  function eachDateInclusive(startStr, endStr, cb){
-    let cur = startStr; while (cur <= endStr){ cb(cur); cur = addDays(cur,1); }
-  }
+  function addDays(dateStr, n){ const [y,m,d]=dateStr.split('-').map(Number); const dt=new Date(y,m-1,d); dt.setDate(dt.getDate()+n); return fmtYMD(dt); }
+  function eachDateInclusive(startStr, endStr, cb){ let cur=startStr; while(cur<=endStr){ cb(cur); cur=addDays(cur,1);} }
 
-  function monthStartEnd(monthStr){
-    const [y,m] = monthStr.split('-').map(Number);
-    const start = new Date(y, m-1, 1);
-    const end = new Date(y, m, 0);
-    return { start, end };
-  }
+  function monthStartEnd(monthStr){ const [y,m]=monthStr.split('-').map(Number); const start=new Date(y,m-1,1); const end=new Date(y,m,0); return {start,end}; }
 
-  function setMonth(monthStr){
-    state.month = monthStr;
-    render();
-    saveState();
-  }
+  function setMonth(monthStr){ state.month=monthStr; render(); saveState(); }
 
-  function weekdayLabel(idx, compact){
-    const full = ['日曜','月曜','火曜','水曜','木曜','金曜','土曜'];
-    const short = ['日','月','火','水','木','金','土'];
-    return compact ? short[idx] : full[idx];
-  }
+  function weekdayLabel(idx, compact){ const full=['日曜','月曜','火曜','水曜','木曜','金曜','土曜']; const short=['日','月','火','水','木','金','土']; return compact? short[idx] : full[idx]; }
 
-  function fmtDateLabel(dateStr, compact){
-    if (!compact) return dateStr;
-    const [y,m,d] = dateStr.split('-').map(Number);
-    return `${m}/${d}`;
-  }
+  function fmtDateLabel(dateStr, compact){ if(!compact) return dateStr; const [y,m,d]=dateStr.split('-').map(Number); return `${m}/${d}`; }
 
   function render(){
-    const monthStr = state.month;
-    const [y, m] = monthStr.split('-').map(Number);
-    monthLabel.textContent = `${y}年 ${m}月`;
-    compactToggle.checked = !!state.compact;
+    try {
+      const monthStr = state.month;
+      const [y, m] = monthStr.split('-').map(Number);
+      monthLabel.textContent = `${y}年 ${m}月`;
+      compactToggle.checked = !!state.compact;
 
-    // 破損幅をここでもClamp
-    state.dateColWidth = clamp(state.dateColWidth, 70, 400);
-    state.weekdayColWidth = clamp(state.weekdayColWidth, 40, 300);
+      state.dateColWidth = clamp(state.dateColWidth, 70, 400);
+      state.weekdayColWidth = clamp(state.weekdayColWidth, 40, 300);
 
-    // ヘッダー再構築
-    while (headerRow.children.length > 2) headerRow.removeChild(headerRow.lastElementChild);
-    headerRow.children[0].style.width = state.dateColWidth + 'px';
-    headerRow.children[1].style.width = state.weekdayColWidth + 'px';
-    syncStickyLeftOffsets();
+      // colgroup更新
+      colDate.style.width = state.dateColWidth + 'px';
+      colWeek.style.width = state.weekdayColWidth + 'px';
 
-    state.columns.forEach(col => {
-      const th = headerTemplate.content.firstElementChild.cloneNode(true);
-      th.dataset.colId = col.id;
-      th.style.width = clamp(col.width || 240, 80, 800) + 'px';
-      th.querySelector('.th-title').textContent = col.title || '予定';
+      // 既存動的colを一旦削除して付け直す
+      [...colgroup.querySelectorAll('col[data-col-id]')].forEach(c => c.remove());
 
-      th.querySelector('.th-title').addEventListener('input', (e) => {
-        col.title = e.currentTarget.textContent.trim();
-        saveState();
-      });
-
-      th.querySelector('.delete-col').addEventListener('click', () => {
-        if (!confirm('この列を削除しますか？（中の予定も削除）')) return;
-        const suffix = '|' + col.id;
-        Object.keys(state.events).forEach(k => { if (k.endsWith(suffix)) delete state.events[k]; });
-        state.columns = state.columns.filter(c => c.id !== col.id);
-        saveState();
-        render();
-      });
-
-      enableColResize(th.querySelector('.col-resizer'), (w) => {
-        col.width = clamp(w, 80, 800);
-        th.style.width = col.width + 'px';
-        saveState();
-      });
-
-      headerRow.appendChild(th);
-    });
-
-    // 行生成
-    tbody.innerHTML = '';
-    const {start, end} = monthStartEnd(monthStr);
-    const d = new Date(start);
-    while (d <= end){
-      const tr = document.createElement('tr');
-      tr.className = 'row-wrapper';
-      const dateStr = fmtYMD(d);
-
-      const thDate = document.createElement('th');
-      thDate.className = 'date-cell row-height';
-      thDate.textContent = fmtDateLabel(dateStr, state.compact);
-      thDate.title = dateStr;
-      thDate.style.width = state.dateColWidth + 'px';
-      if (state.rowHeights[dateStr]) tr.style.setProperty('--row-height', state.rowHeights[dateStr] + 'px');
-
-      const tdW = document.createElement('td');
-      tdW.className = 'weekday-cell row-height';
-      tdW.textContent = weekdayLabel(d.getDay(), state.compact);
-      tdW.style.width = state.weekdayColWidth + 'px';
-
-      tr.appendChild(thDate);
-      tr.appendChild(tdW);
+      // ヘッダー再構築
+      while (headerRow.children.length > 2) headerRow.removeChild(headerRow.lastElementChild);
+      headerRow.children[0].style.width = state.dateColWidth + 'px';
+      headerRow.children[1].style.width = state.weekdayColWidth + 'px';
+      syncStickyLeftOffsets();
 
       state.columns.forEach(col => {
-        const td = document.createElement('td');
-        td.className = 'row-height';
-        const key = dateStr + '|' + col.id;
-        const data = state.events[key];
-        const div = document.createElement('div');
-        div.className = 'cell ' + (data && data.title ? '' : 'empty');
-        div.tabIndex = 0;
-        div.dataset.key = key;
-        div.dataset.date = dateStr;
-        div.dataset.colId = col.id;
+        // colgroupに対応colを追加
+        const colEl = document.createElement('col');
+        colEl.setAttribute('data-col-id', col.id);
+        colEl.style.width = clamp(col.width || 240, 80, 800) + 'px';
+        colgroup.appendChild(colEl);
 
-        if (data && data.spanId && data.spanStart && data.spanEnd){
-          const chip = document.createElement('div');
-          chip.className = 'span-chip';
-          const line = document.createElement('div');
-          line.className = 'line';
-          chip.appendChild(line);
+        // ヘッダーthを追加
+        const th = headerTemplate.content.firstElementChild.cloneNode(true);
+        th.dataset.colId = col.id;
+        th.style.width = colEl.style.width;
+        th.querySelector('.th-title').textContent = col.title || '予定';
 
-          if (data.spanStart === data.spanEnd){
-            chip.classList.add('single');
-          } else if (dateStr === data.spanStart){
-            chip.classList.add('start');
-          } else if (dateStr === data.spanEnd){
-            chip.classList.add('end');
+        th.querySelector('.th-title').addEventListener('input', (e) => { col.title = e.currentTarget.textContent.trim(); saveState(); });
+
+        th.querySelector('.delete-col').addEventListener('click', () => {
+          if (!confirm('この列を削除しますか？（中の予定も削除）')) return;
+          const suffix = '|' + col.id;
+          Object.keys(state.events).forEach(k => { if (k.endsWith(suffix)) delete state.events[k]; });
+          state.columns = state.columns.filter(c => c.id !== col.id);
+          saveState(); render();
+        });
+
+        enableColResize(th.querySelector('.col-resizer'), (w) => {
+          col.width = clamp(w, 80, 800);
+          th.style.width = col.width + 'px';
+          const matchCol = colgroup.querySelector(`col[data-col-id="${cssEscape(col.id)}"]`);
+          if (matchCol) matchCol.style.width = col.width + 'px';
+          saveState();
+        });
+
+        headerRow.appendChild(th);
+      });
+
+      // 行生成
+      tbody.innerHTML = '';
+      const {start, end} = monthStartEnd(monthStr);
+      const d = new Date(start);
+      while (d <= end){
+        const tr = document.createElement('tr');
+        tr.className = 'row-wrapper';
+        const dateStr = fmtYMD(d);
+
+        const thDate = document.createElement('th');
+        thDate.className = 'date-cell row-height';
+        thDate.textContent = fmtDateLabel(dateStr, state.compact);
+        thDate.title = dateStr;
+
+        const tdW = document.createElement('td');
+        tdW.className = 'weekday-cell row-height';
+        tdW.textContent = weekdayLabel(d.getDay(), state.compact);
+
+        if (state.rowHeights[dateStr]) tr.style.setProperty('--row-height', state.rowHeights[dateStr] + 'px');
+
+        tr.appendChild(thDate);
+        tr.appendChild(tdW);
+
+        state.columns.forEach(col => {
+          const td = document.createElement('td');
+          td.className = 'row-height';
+          const key = dateStr + '|' + col.id;
+          const data = state.events[key];
+          const div = document.createElement('div');
+          div.className = 'cell ' + (data && data.title ? '' : 'empty');
+          div.tabIndex = 0;
+          div.dataset.key = key;
+          div.dataset.date = dateStr;
+          div.dataset.colId = col.id;
+
+          if (data && data.spanId && data.spanStart && data.spanEnd){
+            const chip = document.createElement('div');
+            chip.className = 'span-chip';
+            const line = document.createElement('div');
+            line.className = 'line';
+            chip.appendChild(line);
+            if (data.spanStart === data.spanEnd) chip.classList.add('single');
+            else if (dateStr === data.spanStart) chip.classList.add('start');
+            else if (dateStr === data.spanEnd) chip.classList.add('end');
+            div.appendChild(chip);
           }
-          div.appendChild(chip);
-        }
 
-        const span = document.createElement('span');
-        span.className = 'cell-title';
-        span.textContent = formatTitle(data);
-        div.appendChild(span);
+          const span = document.createElement('span');
+          span.className = 'cell-title';
+          span.textContent = formatTitle(data);
+          div.appendChild(span);
 
-        div.addEventListener('click', () => openCellEditor(key, dateStr, col.id));
-        td.appendChild(div);
-        tr.appendChild(td);
+          div.addEventListener('click', () => openCellEditor(key, dateStr, col.id));
+          td.appendChild(div);
+          tr.appendChild(td);
+        });
+
+        const rowResizer = document.createElement('div');
+        rowResizer.className = 'row-resizer';
+        tr.appendChild(rowResizer);
+        enableRowResize(rowResizer, dateStr, (h) => {
+          state.rowHeights[dateStr] = Math.max(24, h);
+          tr.style.setProperty('--row-height', state.rowHeights[dateStr] + 'px');
+          saveState();
+        });
+
+        tbody.appendChild(tr);
+        d.setDate(d.getDate() + 1);
+      }
+
+      // 固定列のリサイズ
+      document.querySelectorAll('th[data-col-fixed="date"] .col-resizer').forEach(res => {
+        enableColResize(res, (w) => {
+          state.dateColWidth = clamp(w, 70, 400);
+          colDate.style.width = state.dateColWidth + 'px';
+          headerRow.children[0].style.width = state.dateColWidth + 'px';
+          syncStickyLeftOffsets(); saveState();
+        });
+      });
+      document.querySelectorAll('th[data-col-fixed="weekday"] .col-resizer').forEach(res => {
+        enableColResize(res, (w) => {
+          state.weekdayColWidth = clamp(w, 40, 300);
+          colWeek.style.width = state.weekdayColWidth + 'px';
+          headerRow.children[1].style.width = state.weekdayColWidth + 'px';
+          syncStickyLeftOffsets(); saveState();
+        });
       });
 
-      const rowResizer = document.createElement('div');
-      rowResizer.className = 'row-resizer';
-      tr.appendChild(rowResizer);
-      enableRowResize(rowResizer, dateStr, (h) => {
-        state.rowHeights[dateStr] = Math.max(24, h);
-        tr.style.setProperty('--row-height', state.rowHeights[dateStr] + 'px');
-        saveState();
-      });
+      // 次フレームで位置再計算（初回測定の誤差対策）
+      requestAnimationFrame(syncStickyLeftOffsets);
+      setTimeout(syncStickyLeftOffsets, 0);
 
-      tbody.appendChild(tr);
-      d.setDate(d.getDate() + 1);
+      // 通知スケジューラの起動
+      scheduleNotificationCheck();
+
+      // セーフモード検出：最初の行の表示を検証
+      const firstDateCell = document.querySelector('tbody th.date-cell');
+      const firstWeekCell = document.querySelector('tbody td.weekday-cell');
+      if (!firstDateCell || !firstWeekCell || !firstDateCell.textContent || !firstWeekCell.textContent){
+        console.warn('Safe mode: re-rendering with defaults');
+        forceSafeDefaults();
+        // 再描画
+        const mm = state.month; state = defaultStateForMonth(mm); saveState(); render();
+      }
+    } catch (e){
+      console.error('Render failed', e);
+      alert('描画に失敗しました。データ初期化をお試しください。');
     }
+  }
 
-    // 固定列のリサイズ
-    document.querySelectorAll('th[data-col-fixed="date"] .col-resizer').forEach(res => {
-      enableColResize(res, (w) => {
-        state.dateColWidth = clamp(w, 70, 400);
-        headerRow.children[0].style.width = state.dateColWidth + 'px';
-        document.querySelectorAll('.date-cell').forEach(c => c.style.width = state.dateColWidth + 'px');
-        syncStickyLeftOffsets();
-        saveState();
-      });
-    });
-    document.querySelectorAll('th[data-col-fixed="weekday"] .col-resizer').forEach(res => {
-      enableColResize(res, (w) => {
-        state.weekdayColWidth = clamp(w, 40, 300);
-        headerRow.children[1].style.width = state.weekdayColWidth + 'px';
-        document.querySelectorAll('.weekday-cell').forEach(c => c.style.width = state.weekdayColWidth + 'px');
-        syncStickyLeftOffsets();
-        saveState();
-      });
-    });
-
-    // 通知スケジューラの起動
-    scheduleNotificationCheck();
+  function forceSafeDefaults(){
+    state.dateColWidth = 120;
+    state.weekdayColWidth = 70;
+    state.compact = false;
   }
 
   function formatTitle(data){
@@ -306,26 +302,23 @@
       setMonth(fmtYM(dt));
     });
     todayBtn.addEventListener('click', () => setMonth(fmtYM(new Date())));
-    addColumnBtn.addEventListener('click', () => {
-      state.columns.push({ id: genId(), title: '予定', width: 240 });
-      saveState(); render();
-    });
+    addColumnBtn.addEventListener('click', () => { state.columns.push({ id: genId(), title: '予定', width: 240 }); saveState(); render(); });
     resetSizesBtn.addEventListener('click', () => {
       if (!confirm('列幅・行高を初期化しますか？')) return;
-      state.dateColWidth = 120;
-      state.weekdayColWidth = 70;
+      state.dateColWidth = 120; state.weekdayColWidth = 70;
       state.columns.forEach(c => c.width = 240);
-      state.rowHeights = {};
-      saveState(); render();
+      state.rowHeights = {}; saveState(); render();
+    });
+    resetDataBtn.addEventListener('click', () => {
+      if (!confirm('保存されたデータを初期化しますか？（予定やカスタマイズが消えます）')) return;
+      localStorage.removeItem('plannerState');
+      localStorage.removeItem('plannerNotifiedMap');
+      state = defaultStateForMonth(fmtYM(new Date())); saveState(); render();
     });
     exportBtn.addEventListener('click', () => {
       const blob = new Blob([JSON.stringify(state, null, 2)], {type: 'application/json'});
       const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `planner-${state.month}.json`;
-      a.click();
-      URL.revokeObjectURL(url);
+      const a = document.createElement('a'); a.href = url; a.download = `planner-${state.month}.json`; a.click(); URL.revokeObjectURL(url);
     });
     importInput.addEventListener('change', (e) => {
       const file = e.target.files && e.target.files[0];
@@ -335,8 +328,7 @@
         try {
           const obj = JSON.parse(reader.result);
           if (!obj || typeof obj !== 'object' || !obj.month) throw new Error('不正なファイルです');
-          state = migrate(obj);
-          saveState(); render();
+          state = migrate(obj); saveState(); render();
         } catch (err) {
           alert('JSONの読み込みに失敗しました: ' + err.message);
         }
@@ -359,57 +351,36 @@
     clearCellBtn.addEventListener('click', onClearCell);
     clearSpanBtn.addEventListener('click', onClearSpan);
 
-    // サイズ変化に伴う位置再計算
-    window.addEventListener('resize', syncStickyLeftOffsets);
-    document.querySelector('#tableWrapper').addEventListener('scroll', syncStickyLeftOffsets, { passive: true });
+    window.addEventListener('resize', () => requestAnimationFrame(syncStickyLeftOffsets));
+    document.querySelector('#tableWrapper').addEventListener('scroll', () => requestAnimationFrame(syncStickyLeftOffsets), { passive: true });
   }
 
   /* ---- 編集ダイアログ ---- */
   function openCellEditor(key, dateStr, colId){
-    activeCellKey = key;
-    activeCellDate = dateStr;
-    activeColId = colId;
-
+    activeCellKey = key; activeCellDate = dateStr; activeColId = colId;
     const data = state.events[key] || { title: '', memo: '', startTime: '', endTime: '', notify: true, notifyTime: '' };
-
-    const defaultStart = data.spanStart || dateStr;
-    const defaultEnd = data.spanEnd || dateStr;
-
-    cellTitle.value = data.title || '';
-    cellMemo.value = data.memo || '';
-    startDateInput.value = defaultStart;
-    endDateInput.value = defaultEnd;
-    startTimeInput.value = data.startTime || '';
-    endTimeInput.value = data.endTime || '';
-    notifyEnabledInput.checked = data.notify !== false;
-    notifyTimeInput.value = data.notifyTime || '';
+    const defaultStart = data.spanStart || dateStr; const defaultEnd = data.spanEnd || dateStr;
+    cellTitle.value = data.title || ''; cellMemo.value = data.memo || '';
+    startDateInput.value = defaultStart; endDateInput.value = defaultEnd;
+    startTimeInput.value = data.startTime || ''; endTimeInput.value = data.endTime || '';
+    notifyEnabledInput.checked = data.notify !== false; notifyTimeInput.value = data.notifyTime || '';
 
     if (data.spanId && data.spanStart && data.spanEnd && data.spanStart !== data.spanEnd){
-      scopeRow.style.display = '';
-      clearSpanBtn.style.display = '';
-      setScope('span');
+      scopeRow.style.display = ''; clearSpanBtn.style.display = ''; setScope('span');
     } else {
-      scopeRow.style.display = 'none';
-      clearSpanBtn.style.display = 'none';
+      scopeRow.style.display = 'none'; clearSpanBtn.style.display = 'none';
     }
 
-    if (typeof cellDialog.showModal === 'function') {
-      cellDialog.showModal();
-    } else {
+    if (typeof cellDialog.showModal === 'function') cellDialog.showModal();
+    else {
       const title = prompt('タイトルを入力', cellTitle.value) || '';
       const memo = prompt('メモを入力', cellMemo.value) || '';
       applySave({ title, memo, start: dateStr, end: dateStr, st: '', et: '', notify: true, ntime: '', scope: 'single' });
     }
   }
 
-  function setScope(v){
-    const radios = document.querySelectorAll('input[name="editScope"]');
-    radios.forEach(r => r.checked = (r.value === v));
-  }
-  function getScope(){
-    const r = document.querySelector('input[name="editScope"]:checked');
-    return r ? r.value : 'span';
-  }
+  function setScope(v){ document.querySelectorAll('input[name="editScope"]').forEach(r => r.checked = (r.value === v)); }
+  function getScope(){ const r = document.querySelector('input[name="editScope"]:checked'); return r? r.value : 'span'; }
 
   function onSaveCell(){
     const title = (cellTitle.value || '').trim();
@@ -446,8 +417,7 @@
         upsertEvent(key, { title, memo, startTime: st, endTime: et, notify, notifyTime: ntime, spanId, spanStart: start, spanEnd: end });
       });
     }
-    saveState();
-    refreshCellsForColumn(activeColId, start, end);
+    saveState(); refreshCellsForColumn(activeColId, start, end);
   }
 
   function upsertEvent(key, obj){
@@ -479,13 +449,9 @@
         const line = document.createElement('div');
         line.className = 'line';
         chip.appendChild(line);
-        if (data.spanStart === data.spanEnd){
-          chip.classList.add('single');
-        } else if (d === data.spanStart){
-          chip.classList.add('start');
-        } else if (d === data.spanEnd){
-          chip.classList.add('end');
-        }
+        if (data.spanStart === data.spanEnd) chip.classList.add('single');
+        else if (d === data.spanStart) chip.classList.add('start');
+        else if (d === data.spanEnd) chip.classList.add('end');
         cell.appendChild(chip);
       }
       const titleEl = cell.querySelector('.cell-title');
@@ -494,39 +460,22 @@
     });
   }
 
-  function onClearCell(){
-    const key = activeCellDate + '|' + activeColId;
-    delete state.events[key];
-    saveState();
-    refreshCellsForColumn(activeColId, activeCellDate, activeCellDate);
-  }
-
+  function onClearCell(){ const key = activeCellDate + '|' + activeColId; delete state.events[key]; saveState(); refreshCellsForColumn(activeColId, activeCellDate, activeCellDate); }
   function onClearSpan(){
     const data = state.events[activeCellKey];
     if (!data || !data.spanId) return;
     if (!confirm('この期間の予定をすべて削除しますか？')) return;
     const spanId = data.spanId;
-    Object.keys(state.events).forEach(k => {
-      if (state.events[k] && state.events[k].spanId === spanId){
-        delete state.events[k];
-      }
-    });
-    saveState();
-    refreshCellsForColumn(activeColId, data.spanStart, data.spanEnd);
+    Object.keys(state.events).forEach(k => { if (state.events[k] && state.events[k].spanId === spanId) delete state.events[k]; });
+    saveState(); refreshCellsForColumn(activeColId, data.spanStart, data.spanEnd);
   }
 
   /* ---- 通知 ---- */
   function requestNotificationPermission(){
-    if (!('Notification' in window)){
-      alert('このブラウザは通知に対応していません。');
-      return;
-    }
+    if (!('Notification' in window)){ alert('このブラウザは通知に対応していません。'); return; }
     Notification.requestPermission().then((perm) => {
-      if (perm === 'granted'){
-        new Notification('通知を有効化しました', { body: '予定時刻にこの端末へお知らせします。' });
-      } else if (perm === 'denied'){
-        alert('通知がブロックされました。ブラウザ設定で許可してください。');
-      }
+      if (perm === 'granted'){ new Notification('通知を有効化しました', { body: '予定時刻にこの端末へお知らせします。' }); }
+      else if (perm === 'denied'){ alert('通知がブロックされました。ブラウザ設定で許可してください。'); }
     });
   }
 
@@ -540,23 +489,19 @@
   function tryNotifyDueEvents(){
     if (!('Notification' in window)) return;
     if (Notification.permission !== 'granted') return;
-
     const now = new Date();
     const months = [state.month, fmtYM(now), fmtYM(new Date(now.getFullYear(), now.getMonth()+1, 1))];
     const keys = Object.keys(state.events).filter(k => months.includes(k.slice(0,7)));
     for (const key of keys){
       const ev = state.events[key];
       if (!ev || ev.notify === false) continue;
-      const [dateStr, colId] = key.split('|');
+      const [dateStr] = key.split('|');
       const baseTime = ev.notifyTime || ev.startTime || '09:00';
       const target = parseDateTimeLocal(dateStr, baseTime);
       if (!target) continue;
       if (now >= target && now - target < 60 * 60 * 1000){
         const nKey = key + '|' + (ev.notifyTime || ev.startTime || '09:00');
-        if (!notifiedMap[nKey]){
-          showEventNotification(ev, dateStr);
-          notifiedMap[nKey] = true;
-        }
+        if (!notifiedMap[nKey]){ showEventNotification(ev, dateStr); notifiedMap[nKey] = true; }
       }
     }
     saveNotifiedMap();
@@ -595,10 +540,10 @@
       const w = Math.max(50, Math.round(startW + dx));
       th.style.width = w + 'px';
       if (th.dataset.colFixed === 'date') {
-        document.querySelectorAll('.date-cell').forEach(c => c.style.width = w + 'px');
+        colDate.style.width = w + 'px';
         syncStickyLeftOffsets();
       } else if (th.dataset.colFixed === 'weekday') {
-        document.querySelectorAll('.weekday-cell').forEach(c => c.style.width = w + 'px');
+        colWeek.style.width = w + 'px';
         syncStickyLeftOffsets();
       }
     };
@@ -649,8 +594,7 @@
   function clientY(e){ return e.touches ? e.touches[0].clientY : e.clientY; }
   function cssEscape(s){ return s.replace(/["\\]/g, '\\$&'); }
 
-  // 初期起動
-  render();
-  bindControls();
+  // 起動
+  render(); bindControls();
 
 })();
